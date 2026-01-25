@@ -1,0 +1,9 @@
+{
+  "requestFramePermissions": [
+    "camera",
+    "microphone",
+    "geolocation"
+  ],
+  "name": "Cactus OpenAi Server",
+  "description": "Turn android devices into openai compatible decentralized AI models."
+}
