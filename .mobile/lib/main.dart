@@ -6,11 +6,15 @@ import 'package:shelf/shelf.dart';
 import 'package:shelf/shelf_io.dart' as io;
 import 'package:shelf_router/shelf_router.dart' as shelf;
 import 'package:network_info_plus/network_info_plus.dart';
+import 'package:shelf_router/shelf_router.dart' as shelf;
+import 'package:shelf_static/shelf_static.dart' as shelf_static;
+import 'package:http/http.dart' as http;
 import 'package:cactus/cactus.dart';
 import 'package:wakelock_plus/wakelock_plus.dart';
 import 'package:path_provider/path_provider.dart';
 import 'package:uuid/uuid.dart';
 import 'package:shared_preferences/shared_preferences.dart';
+import 'screens/loading_model_screen.dart';
 
 void main() {
   WidgetsFlutterBinding.ensureInitialized();
@@ -100,6 +104,12 @@ class _MainScreenState extends State<MainScreen> {
   final List<String> _serverLogs = [];
 
   // Model Loading States
+  // New Notifiers for Loading Screen
+  final ValueNotifier<LoadStatus> _loadStatusNotifier = ValueNotifier(
+    LoadStatus.none,
+  );
+  final ValueNotifier<List<String>> _loadingLogsNotifier = ValueNotifier([]);
+
   LoadStatus _loadStatus = LoadStatus.none;
   int? _selectedContextSize;
   // bool _isModelLoading = false; // Removed as _loadStatus covers it
@@ -426,30 +436,51 @@ class _MainScreenState extends State<MainScreen> {
     final prefs = await SharedPreferences.getInstance();
     await prefs.setString('last_active_model_id', id);
 
-    setState(() {
-      _pendingModelId = id;
-      _loadStatus = LoadStatus.loading;
-      _isWaitingForStart = true;
-      _logs = [
-        'Preparing neural interface...',
-        'Waiting for context selection...',
-      ];
-      _selectedContextSize = 2048; // Default
-    });
+    _pendingModelId = id;
+    _selectedModelId = id; // Ensure selected matches
+    _selectedContextSize = 2048; // Default
+
+    // Reset Notifiers
+    _loadStatusNotifier.value = LoadStatus.none;
+    _loadingLogsNotifier.value = [];
+
+    final model = _models.firstWhere((m) => m.id == id);
+
+    if (context.mounted) {
+      Navigator.of(context).push(
+        MaterialPageRoute(
+          builder: (ctx) => LoadingModelScreen(
+            model: model,
+            statusNotifier: _loadStatusNotifier,
+            logsNotifier: _loadingLogsNotifier,
+            initialContextSize: _selectedContextSize,
+            onContextSelect: (size) => _selectedContextSize = size,
+            onStartLoad: _executeLoad, // Pass the function
+            onCancel: () {
+              _cactusLM.unload();
+              _loadStatusNotifier.value = LoadStatus.none;
+              Navigator.of(ctx).pop();
+            },
+          ),
+        ),
+      );
+    }
   }
 
   Future<void> _executeLoad() async {
     if (_pendingModelId == null) return;
     final id = _pendingModelId!;
 
-    setState(() {
-      _isWaitingForStart = false;
-      _logs = [
-        'Initializing Neural Pipeline...',
-        'Allocating memory tensors...',
-        'Requesting system resource lock...',
-      ];
-    });
+    _loadStatusNotifier.value = LoadStatus.loading;
+    _loadingLogsNotifier.value = [
+      'Initializing Neural Pipeline...',
+      'Allocating memory tensors...',
+      'Requesting system resource lock...',
+    ];
+
+    void addLog(String l) {
+      _loadingLogsNotifier.value = [..._loadingLogsNotifier.value, l];
+    }
 
     try {
       // Ensure clean state
@@ -458,21 +489,30 @@ class _MainScreenState extends State<MainScreen> {
 
       final ctxSize = _selectedContextSize ?? 2048;
       _serverLogs.add('[SYSTEM] Loading $id with ${ctxSize}k context');
+      addLog('Loading model with ${ctxSize}k context...');
 
       await _cactusLM.initializeModel(
         params: CactusInitParams(model: id, contextSize: ctxSize),
       );
 
+      _loadStatusNotifier.value = LoadStatus.success;
+      addLog('DEVICE SYNC COMPLETE');
+      addLog('Ready for inference.');
+
       setState(() {
         _activeModelId = id;
         _loadStatus = LoadStatus.success;
-        _logs.add('DEVICE SYNC COMPLETE');
-        _logs.add('Ready for inference.');
+        _logs.add(
+          'DEVICE SYNC COMPLETE',
+        ); // Keep legacy logs in sync just in case
         _pendingModelId = null;
       });
       _serverLogs.add('[SYSTEM] Model $id loaded successfully');
     } catch (e) {
+      _loadStatusNotifier.value = LoadStatus.error;
+      addLog('[ERROR] Load failed: $e');
       _serverLogs.add('[ERROR] Load failed: $e');
+      setState(() => _loadStatus = LoadStatus.error);
       setState(() {
         _loadStatus = LoadStatus.error;
         _logs.add('[FATAL ERROR] $e');
@@ -1445,26 +1485,18 @@ class _MainScreenState extends State<MainScreen> {
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           const SizedBox(height: 16),
-          // Model Name & Divider
-          Text(
-            model?.name ?? 'SELECT A MODEL',
-            style: const TextStyle(
-              fontSize: 20,
-              fontWeight: FontWeight.w900,
-              color: Colors.white,
-            ),
-          ),
-          const SizedBox(height: 8),
-          Divider(color: Colors.white.withOpacity(0.1)),
-          const SizedBox(height: 16),
+          // Model Name & Divider REMOVED
 
+          /* 
           if (_loadStatus != LoadStatus.none) ...[
             // Move logs up under model name during loading/success/error
-            _buildNeuralLogArea(),
+             _buildNeuralLogArea(),
             const SizedBox(height: 16),
           ],
+          */
 
-          // Context Selection (Row if not loading)
+          // Context Selection REMOVED
+          /*
           if (_loadStatus == LoadStatus.none &&
               model?.isDownloaded == true) ...[
             Text(
@@ -1480,6 +1512,7 @@ class _MainScreenState extends State<MainScreen> {
             _buildContextSelection(model!),
             const SizedBox(height: 24),
           ],
+          */
 
           // Control row
           Row(
@@ -1487,10 +1520,7 @@ class _MainScreenState extends State<MainScreen> {
               // Play/Cancel button
               GestureDetector(
                 onTap: () {
-                  if (_loadStatus == LoadStatus.loading) {
-                    _cactusLM.unload();
-                    setState(() => _loadStatus = LoadStatus.none);
-                  } else if (model?.isDownloaded == true) {
+                  if (model?.isDownloaded == true) {
                     _prepareLoadModel(model!.id);
                   }
                 },
@@ -1498,43 +1528,23 @@ class _MainScreenState extends State<MainScreen> {
                   height: 56,
                   padding: const EdgeInsets.symmetric(horizontal: 20),
                   decoration: BoxDecoration(
-                    color: _loadStatus == LoadStatus.loading
-                        ? Colors.red.withOpacity(0.1)
-                        : Colors.white,
+                    color: Colors.white,
                     borderRadius: BorderRadius.circular(16),
-                    border: _loadStatus == LoadStatus.loading
-                        ? Border.all(color: Colors.red)
-                        : null,
                   ),
                   child: Row(
                     children: [
-                      Icon(
-                        _loadStatus == LoadStatus.loading
-                            ? Icons.stop_rounded
-                            : Icons.play_arrow,
+                      const Icon(
+                        Icons.play_arrow,
                         size: 28,
-                        color: _loadStatus == LoadStatus.loading
-                            ? Colors.red
-                            : const Color(0xFF22C55E),
+                        color: Color(0xFF22C55E),
                       ),
-                      if (_loadStatus == LoadStatus.loading) ...[
-                        const SizedBox(width: 8),
-                        const Text(
-                          'CANCEL LOAD',
-                          style: TextStyle(
-                            fontWeight: FontWeight.w900,
-                            color: Colors.red,
-                            fontSize: 12,
-                          ),
-                        ),
-                      ],
                     ],
                   ),
                 ),
               ),
               const SizedBox(width: 12),
               // Dropdown
-              if (_loadStatus == LoadStatus.none)
+              if (true) // Always show dropdown now as loading is separate screen
                 Expanded(
                   child: Container(
                     height: 56,
