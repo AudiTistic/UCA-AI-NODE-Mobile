@@ -1,20 +1,20 @@
 
 import React, { useState, useEffect, useRef } from 'react';
 import { createRoot } from 'react-dom/client';
-import { 
-  GoogleGenAI, 
-  LiveServerMessage, 
-  Modality, 
-  Blob, 
+import {
+  GoogleGenAI,
+  LiveServerMessage,
+  Modality,
+  Blob,
   GenerateContentResponse,
 } from '@google/genai';
-import { 
-  Mic, 
-  Video, 
-  VideoOff, 
-  Send, 
-  Activity, 
-  MapPin, 
+import {
+  Mic,
+  Video,
+  VideoOff,
+  Send,
+  Activity,
+  MapPin,
   Camera,
   Layers,
   Cpu,
@@ -37,8 +37,15 @@ import {
   Layers as LayersIcon,
   Wrench,
   Sparkles,
-  Search
+  Search,
+  Copy,
+  Check,
+  Server,
+  Clock,
+  ArrowUpRight,
+  Network
 } from 'lucide-react';
+import { LoadingScreen } from './components/LoadingScreen';
 
 // --- Types ---
 type Tab = 'agent' | 'model' | 'live' | 'sensors' | 'openai';
@@ -116,10 +123,10 @@ const App: React.FC = () => {
   const [messages, setMessages] = useState<Message[]>([]);
   const [inputText, setInputText] = useState('');
   const [isLiveActive, setIsLiveActive] = useState(false);
-  const [location, setLocation] = useState<{lat: number, lng: number} | null>(null);
+  const [location, setLocation] = useState<{ lat: number, lng: number } | null>(null);
   const [battery, setBattery] = useState<number | null>(null);
   const [isLoading, setIsLoading] = useState(false);
-  
+
   // App States
   const [activeModelId, setActiveModelId] = useState<string>('cactus-pro-8b-q6');
   const [isOpenAIServerStarted, setIsOpenAIServerStarted] = useState(false);
@@ -133,16 +140,43 @@ const App: React.FC = () => {
   const [isHuggingFaceMode, setIsHuggingFaceMode] = useState(false);
   const [hfInput, setHfInput] = useState('');
   const [hfStatus, setHfStatus] = useState<'idle' | 'verifying' | 'valid' | 'invalid'>('idle');
-  
+
   // Locked Screens
   const [isDownloadLocked, setIsDownloadLocked] = useState(false);
   const [isBenchmarking, setIsBenchmarking] = useState(false);
   const [progress, setProgress] = useState(0);
   const [logs, setLogs] = useState<string[]>([]);
-  
+
   // Refs
   const logEndRef = useRef<HTMLDivElement | null>(null);
   const hfValidationTimeout = useRef<number | null>(null);
+
+  const [loadingScreenModel, setLoadingScreenModel] = useState<LocalModel | null>(null);
+
+  // OpenAI Tab States
+  const [copied, setCopied] = useState(false);
+  const [uptime, setUptime] = useState(0);
+  const [requestCount, setRequestCount] = useState(0);
+
+  useEffect(() => {
+    let interval: number;
+    if (isOpenAIServerStarted) {
+      interval = window.setInterval(() => {
+        setUptime(prev => prev + 1);
+        if (Math.random() > 0.7) setRequestCount(prev => prev + 1);
+      }, 1000);
+    } else {
+      setUptime(0);
+      setRequestCount(0);
+    }
+    return () => clearInterval(interval);
+  }, [isOpenAIServerStarted]);
+
+  const copyEndpoint = () => {
+    navigator.clipboard.writeText('http://localhost:11434/v1'); // Standard local ID
+    setCopied(true);
+    setTimeout(() => setCopied(false), 2000);
+  };
 
   useEffect(() => {
     if (logEndRef.current) logEndRef.current.scrollIntoView({ behavior: 'smooth' });
@@ -206,7 +240,7 @@ const App: React.FC = () => {
         }, 1200);
       } else {
         setProgress(Math.floor(p));
-        if (Math.random() > 0.8) setLogs(prev => [...prev, `Chunk ${Math.floor(Math.random()*1000)} OK...`]);
+        if (Math.random() > 0.8) setLogs(prev => [...prev, `Chunk ${Math.floor(Math.random() * 1000)} OK...`]);
       }
     }, 300);
   };
@@ -239,8 +273,8 @@ const App: React.FC = () => {
   };
 
   const loadModel = (id: string) => {
-    setAppStatus('loading');
-    setTimeout(() => { setActiveModelId(id); setAppStatus('ready'); }, 1200);
+    const model = allModels.find(m => m.id === id);
+    if (model) setLoadingScreenModel(model);
   };
 
   const viewedModel = allModels.find(m => m.id === viewedModelId);
@@ -256,6 +290,12 @@ const App: React.FC = () => {
     }
   };
   const { bg: statusBg, icon: boltColor, statusTxt } = getStatusStyle();
+
+  // Header Logic
+  const headerIcon = isOpenAIServerStarted ? <Network size={22} className="text-blue-500" strokeWidth={3} /> : <Zap size={22} className={boltColor} fill="currentColor" strokeWidth={3} />;
+  const headerIconBg = isOpenAIServerStarted ? 'bg-white' : statusBg;
+  const headerTitleColor = isOpenAIServerStarted ? 'text-blue-500' : 'text-white';
+  const headerSubtitleColor = isOpenAIServerStarted ? 'text-blue-400' : 'text-green-500';
 
   return (
     <div className="flex flex-col h-screen w-full max-w-2xl lg:max-w-3xl mx-auto relative overflow-hidden cactus-gradient select-none border-x border-white/5 shadow-2xl">
@@ -301,20 +341,35 @@ const App: React.FC = () => {
       {/* Header */}
       <header className="p-4 flex items-center justify-between glass z-50 border-b border-white/10 shrink-0">
         <div className="flex items-center gap-2">
-          <div className={`w-10 h-10 rounded-xl ${statusBg} flex items-center justify-center shadow-lg transition-all duration-500`}>
-            <Zap size={22} className={boltColor} fill="currentColor" strokeWidth={3} />
+          <div className={`w-10 h-10 rounded-xl ${headerIconBg} flex items-center justify-center shadow-lg transition-all duration-500`}>
+            {headerIcon}
           </div>
           <div>
-            <h1 className="font-black text-lg tracking-tight text-white leading-none">Cactus AI</h1>
-            <span className="text-[10px] text-green-500 uppercase font-bold tracking-widest">
+            <h1 className={`font-black text-lg tracking-tight leading-none ${headerTitleColor}`}>Cactus AI</h1>
+            <span className={`text-[10px] uppercase font-bold tracking-widest ${headerSubtitleColor}`}>
               {isOpenAIServerStarted ? 'Android Remote Node' : 'Android Local Agent'}
             </span>
           </div>
         </div>
-        <div className={`text-[10px] font-mono font-bold bg-white/5 px-2 py-1 rounded border border-white/5 ${appStatus === 'offline' ? 'text-red-500' : statusTxt}`}>
+        <div className={`text-[10px] font-mono font-bold px-2 py-1 rounded border ${isOpenAIServerStarted ? 'bg-blue-500/10 border-blue-500/20 text-blue-500' : `bg-white/5 border-white/5 ${appStatus === 'offline' ? 'text-red-500' : statusTxt}`}`}>
           {activeModel ? activeModel.name : 'OFFLINE'}
         </div>
       </header>
+
+      {/* Loading Screen Overlay */}
+      {
+        loadingScreenModel && (
+          <LoadingScreen
+            model={loadingScreenModel}
+            onCancel={() => setLoadingScreenModel(null)}
+            onComplete={() => {
+              setActiveModelId(loadingScreenModel.id);
+              setAppStatus('ready');
+              setLoadingScreenModel(null);
+            }}
+          />
+        )
+      }
 
       {/* Main Content */}
       <main className="flex-1 overflow-hidden relative">
@@ -349,21 +404,20 @@ const App: React.FC = () => {
                 <h3 className="text-[10px] font-black text-gray-500 uppercase tracking-widest px-1">Weight Repository</h3>
                 <div className="flex gap-2 items-center">
                   {/* Play Button */}
-                  <button 
-                    disabled={!isViewedDownloaded || viewedModelId === activeModelId}
+                  <button
+                    disabled={!isViewedDownloaded}
                     onClick={() => loadModel(viewedModelId)}
-                    className={`w-14 h-14 rounded-2xl flex items-center justify-center transition-all shadow-md active:scale-90 ${
-                      isViewedDownloaded ? 'bg-white text-green-500' : 'bg-white/5 text-gray-700'
-                    }`}
+                    className={`w-14 h-14 rounded-2xl flex items-center justify-center transition-all shadow-md active:scale-90 ${isViewedDownloaded ? 'bg-white text-green-500' : 'bg-white/5 text-gray-700'
+                      }`}
                   >
                     <Play size={24} fill="currentColor" strokeWidth={3} />
                   </button>
-                  
+
                   {/* Dropdown/Input */}
                   <div className="flex-1">
                     {!isHuggingFaceMode ? (
                       <div className="relative">
-                        <select 
+                        <select
                           value={viewedModelId}
                           onChange={(e) => {
                             if (e.target.value === 'hf-trigger') { setIsHuggingFaceMode(true); setViewedModelId(''); }
@@ -395,9 +449,8 @@ const App: React.FC = () => {
                     </button>
                   ) : (
                     <button disabled={!canDownload} onClick={startDownload}
-                      className={`w-14 h-14 rounded-2xl flex items-center justify-center transition-all shadow-md active:scale-95 ${
-                        canDownload ? 'bg-white text-green-500' : 'bg-white/5 text-gray-700'
-                      }`}
+                      className={`w-14 h-14 rounded-2xl flex items-center justify-center transition-all shadow-md active:scale-95 ${canDownload ? 'bg-white text-green-500' : 'bg-white/5 text-gray-700'
+                        }`}
                     >
                       <Download size={24} strokeWidth={3} className="scale-110" />
                     </button>
@@ -409,49 +462,49 @@ const App: React.FC = () => {
                   <div className="animate-in fade-in slide-in-from-top-2 duration-300 space-y-4">
                     <div className="glass p-5 rounded-3xl border border-white/5 grid grid-cols-2 gap-y-4 gap-x-6 shadow-xl">
                       <div className="flex items-center gap-3">
-                         <LayersIcon className="text-blue-500" size={18} />
-                         <div>
-                            <p className="text-[10px] font-black text-gray-500 uppercase">Context Window</p>
-                            <p className="text-xs font-bold text-white">{viewedModel.meta?.contextSize || 'Unknown'}</p>
-                         </div>
+                        <LayersIcon className="text-blue-500" size={18} />
+                        <div>
+                          <p className="text-[10px] font-black text-gray-500 uppercase">Context Window</p>
+                          <p className="text-xs font-bold text-white">{viewedModel.meta?.contextSize || 'Unknown'}</p>
+                        </div>
                       </div>
                       <div className="flex items-center gap-3">
-                         <Activity className="text-green-500" size={18} />
-                         <div>
-                            <p className="text-[10px] font-black text-gray-500 uppercase">Token Limit</p>
-                            <p className="text-xs font-bold text-white">{viewedModel.meta?.tokenLimit || 'N/A'}</p>
-                         </div>
+                        <Activity className="text-green-500" size={18} />
+                        <div>
+                          <p className="text-[10px] font-black text-gray-500 uppercase">Token Limit</p>
+                          <p className="text-xs font-bold text-white">{viewedModel.meta?.tokenLimit || 'N/A'}</p>
+                        </div>
                       </div>
                       <div className="flex items-center gap-3">
-                         <Gauge className="text-yellow-500" size={18} />
-                         <div>
-                            <p className="text-[10px] font-black text-gray-500 uppercase">Speed Rating</p>
-                            <p className={`text-xs font-bold ${viewedModel.meta?.speed === 'Faster' ? 'text-green-400' : 'text-white'}`}>{viewedModel.meta?.speed || 'Evaluating'}</p>
-                         </div>
+                        <Gauge className="text-yellow-500" size={18} />
+                        <div>
+                          <p className="text-[10px] font-black text-gray-500 uppercase">Speed Rating</p>
+                          <p className={`text-xs font-bold ${viewedModel.meta?.speed === 'Faster' ? 'text-green-400' : 'text-white'}`}>{viewedModel.meta?.speed || 'Evaluating'}</p>
+                        </div>
                       </div>
                       <div className="flex items-center gap-3">
-                         <Calendar className="text-purple-500" size={18} />
-                         <div>
-                            <p className="text-[10px] font-black text-gray-500 uppercase">Trained Date</p>
-                            <p className="text-xs font-bold text-white">{viewedModel.meta?.trained || '--/--'}</p>
-                         </div>
+                        <Calendar className="text-purple-500" size={18} />
+                        <div>
+                          <p className="text-[10px] font-black text-gray-500 uppercase">Trained Date</p>
+                          <p className="text-xs font-bold text-white">{viewedModel.meta?.trained || '--/--'}</p>
+                        </div>
                       </div>
                       <div className="col-span-2 space-y-3 pt-2 border-t border-white/5">
                         <div className="space-y-1">
-                          <div className="flex items-center gap-2 text-[10px] font-black text-gray-500 uppercase"><Sparkles size={12}/> Roles</div>
+                          <div className="flex items-center gap-2 text-[10px] font-black text-gray-500 uppercase"><Sparkles size={12} /> Roles</div>
                           <div className="flex flex-wrap gap-1">
                             {viewedModel.meta?.roles.map(r => <span key={r} className="text-[8px] font-bold bg-white/5 px-2 py-0.5 rounded border border-white/5">{r}</span>) || <span className="text-[8px] italic text-gray-600">Pending audit...</span>}
                           </div>
                         </div>
                         <div className="space-y-1">
-                          <div className="flex items-center gap-2 text-[10px] font-black text-gray-500 uppercase"><Wrench size={12}/> Tools</div>
+                          <div className="flex items-center gap-2 text-[10px] font-black text-gray-500 uppercase"><Wrench size={12} /> Tools</div>
                           <div className="flex flex-wrap gap-1">
                             {viewedModel.meta?.tools.map(t => <span key={t} className="text-[8px] font-bold bg-blue-500/10 text-blue-400 px-2 py-0.5 rounded border border-blue-500/10">{t}</span>) || 'None'}
                           </div>
                         </div>
                         <div className="flex justify-between items-center pt-2">
-                           <div className="flex items-center gap-2 text-[10px] font-black text-gray-500 uppercase">Languages</div>
-                           <div className="flex gap-1 text-sm">{viewedModel.meta?.languages.join(' ') || '🌎'}</div>
+                          <div className="flex items-center gap-2 text-[10px] font-black text-gray-500 uppercase">Languages</div>
+                          <div className="flex gap-1 text-sm">{viewedModel.meta?.languages.join(' ') || '🌎'}</div>
                         </div>
                       </div>
                     </div>
@@ -460,7 +513,7 @@ const App: React.FC = () => {
                     <div className="glass p-5 rounded-3xl border border-white/5 space-y-4">
                       <div className="flex justify-between items-center">
                         <h3 className="text-[10px] font-black text-gray-500 uppercase tracking-widest">Hardware Benchmark</h3>
-                        <button 
+                        <button
                           onClick={runBenchmark}
                           disabled={!isViewedDownloaded}
                           className={`flex items-center gap-2 px-3 py-1.5 rounded-xl font-black text-[10px] uppercase tracking-widest transition-all ${isViewedDownloaded ? 'bg-green-500 text-black hover:scale-105' : 'bg-white/5 text-gray-700'}`}
@@ -501,37 +554,91 @@ const App: React.FC = () => {
           )}
 
           {activeTab === 'openai' && (
-            <div className="space-y-6 animate-in fade-in duration-300 max-w-xl mx-auto">
-               <div className="space-y-2 text-center py-8">
-                  <Globe className={`mx-auto ${isOpenAIServerStarted ? 'text-green-400 animate-pulse' : 'text-gray-700'}`} size={64} strokeWidth={2.5} />
-                  <h2 className="text-3xl font-black text-white uppercase italic tracking-tighter">OpenAI Compatible Bridge</h2>
-               </div>
-               <div className="glass p-8 rounded-3xl border border-white/5 space-y-6">
+            <div className="space-y-2 animate-in fade-in duration-300 max-w-xl mx-auto pb-24">
+              {/* Hero Section */}
+              <div className="space-y-4 text-center py-2">
+                <div>
+                  <h2 className="text-3xl font-black uppercase italic tracking-tighter">
+                    <span className={isOpenAIServerStarted ? 'text-blue-500' : 'text-green-400'}>Open</span>
+                    <span className="text-white">AI </span>
+                    <span className={isOpenAIServerStarted ? 'text-blue-500' : 'text-green-400'}>Bridge</span>
+                  </h2>
+                  <p className="text-[10px] text-gray-500 uppercase tracking-widest font-bold">SECURE API GATEWAY</p>
+                </div>
+              </div>
+
+              {/* Main Control Card */}
+              <div className="glass p-1 rounded-3xl border border-white/5 overflow-hidden">
+                <div className="bg-black/40 p-6 space-y-2">
                   <div className="flex items-center justify-between">
-                     <div className="flex items-center gap-4"><Smartphone className="text-blue-500" size={24} /><span className="font-bold text-lg">Server Host</span></div>
-                     <button onClick={() => setIsOpenAIServerStarted(!isOpenAIServerStarted)} className={`w-14 h-8 rounded-full flex items-center p-1 transition-all ${isOpenAIServerStarted ? 'bg-green-500 justify-end' : 'bg-gray-700 justify-start'}`}>
-                        <div className="w-6 h-6 bg-white rounded-full shadow-lg" />
-                     </button>
+                    <div className="flex items-center gap-4">
+                      <div className={`p-3 rounded-xl ${isOpenAIServerStarted ? 'bg-blue-500 text-black' : 'bg-white/5 text-gray-500'}`}>
+                        <Server size={24} strokeWidth={2.5} />
+                      </div>
+                      <div>
+                        <span className="font-bold text-lg text-white block">Server Status</span>
+                        <span className={`text-xs font-mono uppercase ${isOpenAIServerStarted ? 'text-blue-500' : 'text-gray-500'}`}>
+                          {isOpenAIServerStarted ? '● Online' : '○ Stopped'}
+                        </span>
+                      </div>
+                    </div>
+
+                    {/* Toggle Switch */}
+                    <button
+                      onClick={() => setIsOpenAIServerStarted(!isOpenAIServerStarted)}
+                      className={`w-16 h-9 rounded-full relative transition-all duration-300 ${isOpenAIServerStarted ? 'bg-blue-500' : 'bg-white/10'}`}
+                    >
+                      <div className={`absolute top-1 bottom-1 w-7 bg-white rounded-full shadow-lg transition-all duration-300 ${isOpenAIServerStarted ? 'left-8' : 'left-1'}`} />
+                    </button>
                   </div>
+
+                  {/* Endpoint Box */}
                   {isOpenAIServerStarted && (
-                    <div className="space-y-2 p-4 bg-black/40 rounded-2xl border border-white/5 font-mono text-[10px] text-green-500/80 animate-in zoom-in-95">
-                      <p className="uppercase font-black text-gray-600 mb-2 border-b border-white/5 pb-1">Endpoint Active</p>
-                      <p className="truncate">https://api.cactus.local/v1/chat</p>
+                    <div className="space-y-2 animate-in slide-in-from-top-2">
+                      <label className="text-[10px] font-black text-gray-500 uppercase px-1">API Endpoint</label>
+                      <div className="flex items-center gap-2 bg-black/50 border border-white/10 rounded-xl p-1 pl-4">
+                        <p className="flex-1 font-mono text-xs text-blue-400 truncate">http://localhost:11434/v1</p>
+                        <button
+                          onClick={copyEndpoint}
+                          className="p-2.5 rounded-lg bg-white/5 hover:bg-white/10 text-gray-400 hover:text-white transition-all"
+                        >
+                          {copied ? <Check size={16} className="text-green-500" /> : <Copy size={16} />}
+                        </button>
+                      </div>
                     </div>
                   )}
-               </div>
-            </div>
-          )}
+                </div>
 
-          {activeTab === 'sensors' && (
-            <div className="space-y-4 animate-in slide-in-from-right-4 duration-300 max-w-xl mx-auto">
-               <div className="glass p-6 rounded-3xl border border-white/5 space-y-4">
-                  <div className="flex justify-between items-center"><h3 className="text-xs font-black uppercase text-white tracking-widest">Vision Node</h3><div className="w-2 h-2 rounded-full bg-red-500 shadow-[0_0_8px_red] animate-pulse" /></div>
-                  <div className="aspect-video bg-black/40 rounded-2xl flex flex-col items-center justify-center gap-3 border border-white/5">
-                     <Camera className="text-gray-800" size={56} />
-                     <span className="text-[10px] font-bold text-gray-700 uppercase">Input Offline</span>
+                {/* Stats Grid */}
+                {isOpenAIServerStarted && (
+                  <div className="border-t border-white/5 bg-white/[0.02] p-4">
+                    <div className="grid grid-cols-2 gap-4 mb-4">
+                      <div className="p-3 bg-white/5 rounded-2xl text-center space-y-1">
+                        <p className="text-[9px] font-black text-gray-500 uppercase">Pending Req</p>
+                        <p className="text-xl font-black text-yellow-400 font-mono tracking-tighter">0</p>
+                      </div>
+                      <div className="p-3 bg-white/5 rounded-2xl text-center space-y-1">
+                        <p className="text-[9px] font-black text-gray-500 uppercase">Token/s</p>
+                        <p className="text-xl font-black text-yellow-400 font-mono tracking-tighter">45.5</p>
+                      </div>
+                    </div>
+                    <div className="grid grid-cols-3 divide-x divide-white/5 border border-white/5 rounded-2xl bg-black/20">
+                      <div className="p-3 text-center space-y-1">
+                        <p className="text-[8px] font-black text-gray-600 uppercase">Tok In</p>
+                        <p className="text-sm font-black text-white font-mono">{requestCount * 124}</p>
+                      </div>
+                      <div className="p-3 text-center space-y-1">
+                        <p className="text-[8px] font-black text-gray-600 uppercase">Tok Out</p>
+                        <p className="text-sm font-black text-white font-mono">{requestCount * 482}</p>
+                      </div>
+                      <div className="p-3 text-center space-y-1">
+                        <p className="text-[8px] font-black text-gray-600 uppercase">Earned</p>
+                        <p className="text-sm font-black text-blue-400 font-mono">{(requestCount * (124 + 482) * 0.9).toFixed(0)} <span className="text-[8px] text-gray-500">TOKENS</span></p>
+                      </div>
+                    </div>
                   </div>
-               </div>
+                )}
+              </div>
             </div>
           )}
         </div>
@@ -551,26 +658,26 @@ const App: React.FC = () => {
       </main>
 
       {/* Navigation */}
-      <nav className="h-22 flex items-center justify-around border-t border-white/10 glass shrink-0 px-4 pb-2">
-        <button onClick={() => setActiveTab('agent')} className={`flex flex-col items-center gap-1 flex-1 transition-all ${activeTab === 'agent' ? 'text-green-500 scale-105' : 'text-gray-600'}`}>
+      <nav className="h-22 flex items-center justify-around border-t border-white/10 glass shrink-0 px-4 pb-2 relative transition-all">
+        <button onClick={() => !isOpenAIServerStarted && setActiveTab('agent')} className={`flex flex-col items-center gap-1 flex-1 transition-all ${isOpenAIServerStarted ? 'opacity-50 grayscale pointer-events-none' : ''} ${activeTab === 'agent' ? 'text-green-500 scale-105' : 'text-gray-600'}`}>
           <Layers size={22} /><span className="text-[9px] font-black uppercase">Agent</span>
         </button>
-        <button onClick={() => setActiveTab('model')} className={`flex flex-col items-center gap-1 flex-1 transition-all ${activeTab === 'model' ? 'text-green-500 scale-105' : 'text-gray-600'}`}>
+        <button onClick={() => !isOpenAIServerStarted && setActiveTab('model')} className={`flex flex-col items-center gap-1 flex-1 transition-all ${isOpenAIServerStarted ? 'opacity-50 grayscale pointer-events-none' : ''} ${activeTab === 'model' ? 'text-green-500 scale-105' : 'text-gray-600'}`}>
           <Cpu size={22} /><span className="text-[9px] font-black uppercase">Model</span>
         </button>
-        <button onClick={() => setActiveTab('live')} className="relative flex-1">
+        <button onClick={() => !isOpenAIServerStarted && setActiveTab('live')} className={`relative flex-1 ${isOpenAIServerStarted ? 'opacity-50 grayscale pointer-events-none' : ''}`}>
           <div className={`p-4 rounded-3xl -mt-12 transition-all mx-auto w-fit shadow-xl ${activeTab === 'live' ? 'bg-green-500 text-black border-4 border-[#0c0d0c] scale-110' : 'bg-zinc-900 text-gray-500'}`}>
             <Mic size={24} strokeWidth={2.5} />
           </div>
           <span className={`text-[9px] mt-2 font-black uppercase block text-center ${activeTab === 'live' ? 'text-green-500' : 'text-gray-600'}`}>Live</span>
         </button>
-        <button onClick={() => setActiveTab('sensors')} className={`flex flex-col items-center gap-1 flex-1 transition-all ${activeTab === 'sensors' ? 'text-green-500 scale-105' : 'text-gray-600'}`}>
+        <button onClick={() => !isOpenAIServerStarted && setActiveTab('sensors')} className={`flex flex-col items-center gap-1 flex-1 transition-all ${isOpenAIServerStarted ? 'opacity-50 grayscale pointer-events-none' : ''} ${activeTab === 'sensors' ? 'text-green-500 scale-105' : 'text-gray-600'}`}>
           <Activity size={22} /><span className="text-[9px] font-black uppercase">Sensors</span>
         </button>
-        
+
         <div className="h-8 w-px bg-white/10 mx-2" />
-        
-        <button onClick={() => setActiveTab('openai')} className={`flex flex-col items-center gap-1 flex-1 transition-all ${activeTab === 'openai' ? 'text-blue-500 scale-105' : 'text-gray-600'}`}>
+
+        <button onClick={() => !isOpenAIServerStarted && setActiveTab('openai')} className={`flex flex-col items-center gap-1 flex-1 transition-all ${activeTab === 'openai' ? 'text-blue-500 scale-105' : 'text-gray-600'}`}>
           <Globe size={22} /><span className="text-[9px] font-black uppercase">OpenAI</span>
         </button>
       </nav>
