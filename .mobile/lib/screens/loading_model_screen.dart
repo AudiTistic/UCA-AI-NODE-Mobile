@@ -1,5 +1,5 @@
 import 'package:flutter/material.dart';
-import '../main.dart'; // To access ModelInfo, LoadStatus in main.dart or we might need move them to a shared model file later.
+import '../models.dart';
 // Temporarily we can redefine or import if possible.
 // Ideally ModelInfo should be in its own file.
 // For now I will assume I can import main.dart types or I will copy ModelInfo definition if it's private but it's public.
@@ -26,8 +26,8 @@ class LoadingModelScreen extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return WillPopScope(
-      onWillPop: () async => false, // Lock navigation
+    return PopScope(
+      canPop: false, // Lock navigation
       child: Scaffold(
         backgroundColor: const Color(0xFF111111),
         body: SafeArea(
@@ -423,13 +423,13 @@ class _ContextSelectorState extends State<_ContextSelector> {
   Widget build(BuildContext context) {
     // Generate context options
     final double maxCtx = _calculateMaxContext(widget.model);
-    final List<int> contexts = [
+    final List<int> contexts = {
       2048,
       4096,
       8192,
       (maxCtx * 0.5).toInt(),
       maxCtx.toInt(),
-    ].toSet().toList()..sort(); // Dedup and sort
+    }.toList()..sort(); // Dedup and sort
 
     // Filter out crazy small ones or restrict if needed.
     // Keeping it simple.

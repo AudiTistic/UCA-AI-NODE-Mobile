@@ -5,16 +5,14 @@ import 'package:flutter/material.dart';
 import 'package:shelf/shelf.dart';
 import 'package:shelf/shelf_io.dart' as io;
 import 'package:shelf_router/shelf_router.dart' as shelf;
-import 'package:network_info_plus/network_info_plus.dart';
-import 'package:shelf_router/shelf_router.dart' as shelf;
-import 'package:shelf_static/shelf_static.dart' as shelf_static;
-import 'package:http/http.dart' as http;
 import 'package:cactus/cactus.dart';
 import 'package:wakelock_plus/wakelock_plus.dart';
-import 'package:path_provider/path_provider.dart';
 import 'package:uuid/uuid.dart';
 import 'package:shared_preferences/shared_preferences.dart';
+import 'package:path_provider/path_provider.dart';
+import 'package:path/path.dart' as p;
 import 'screens/loading_model_screen.dart';
+import 'models.dart';
 
 void main() {
   WidgetsFlutterBinding.ensureInitialized();
@@ -39,40 +37,6 @@ class CactusAIApp extends StatelessWidget {
   }
 }
 
-enum LoadStatus { none, loading, success, error }
-
-class ModelInfo {
-  final String id;
-  final String name;
-  final String size;
-  final String contextWindow;
-  final String tokenLimit;
-  final String speedRating;
-  final String trainedDate;
-  final String vram;
-  final List<String> roles;
-  final List<String> tools;
-  final String languages;
-  final String quantization;
-  bool isDownloaded;
-
-  ModelInfo({
-    required this.id,
-    required this.name,
-    required this.size,
-    required this.contextWindow,
-    required this.tokenLimit,
-    required this.speedRating,
-    required this.trainedDate,
-    required this.vram,
-    required this.roles,
-    required this.tools,
-    required this.languages,
-    this.quantization = 'Q8',
-    this.isDownloaded = false,
-  });
-}
-
 class MainScreen extends StatefulWidget {
   const MainScreen({super.key});
 
@@ -85,12 +49,14 @@ class _MainScreenState extends State<MainScreen> {
   HttpServer? _server;
   bool _isServerRunning = false;
   String _ipAddress = '192.168.1.100';
-  int _port = 8080;
+  final int _port = 8080;
   int _requestCount = 0;
   final List<Message> _messages = [];
   final TextEditingController _inputController = TextEditingController();
   final TextEditingController _hfController = TextEditingController();
-  bool _isLoading = false;
+  final TextEditingController _hfTokenController =
+      TextEditingController(); // New Token Controller
+  final bool _isLoading = false;
   final CactusLM _cactusLM = CactusLM();
   final _uuid = const Uuid();
 
@@ -115,9 +81,9 @@ class _MainScreenState extends State<MainScreen> {
   // bool _isModelLoading = false; // Removed as _loadStatus covers it
 
   // Server Stats
-  int _pendingConnections = 0;
-  int _totalTokensIn = 0;
-  int _totalTokensOut = 0;
+  final int _pendingConnections = 0;
+  final int _totalTokensIn = 0;
+  final int _totalTokensOut = 0;
   int get _tokensEarned => ((_totalTokensIn + _totalTokensOut) * 0.95).toInt();
 
   // Loading State
@@ -143,6 +109,10 @@ class _MainScreenState extends State<MainScreen> {
       ],
       tools: ['Google Search', 'Filesystem', 'Bash', 'Code Exec', 'Vision'],
       languages: 'US ES FR DE JP CN',
+      isSupported: false,
+      targetUnit: 'NPU',
+      pciDeviceId: '0x10DE:0x2204',
+      unitId: 1, // Becomes NPU1
     ),
     ModelInfo(
       id: 'gemma-3-1b-pt',
@@ -157,6 +127,9 @@ class _MainScreenState extends State<MainScreen> {
       tools: ['Web Search', 'Code Exec'],
       languages: 'GLOBAL',
       quantization: 'Q4_K_M',
+      targetUnit: 'GPU',
+      pciDeviceId: '0x8086:0x9A40',
+      unitId: 1,
     ),
     ModelInfo(
       id: 'qwen3-0.6',
@@ -170,6 +143,9 @@ class _MainScreenState extends State<MainScreen> {
       roles: ['Rapid Coder', 'Edge Assistant'],
       tools: ['Search'],
       languages: 'GLOBAL',
+      targetUnit: 'CPU',
+      pciDeviceId: '0x0000:0x0000',
+      unitId: 2,
     ),
   ];
 
@@ -312,7 +288,7 @@ class _MainScreenState extends State<MainScreen> {
         modelId = _hfController.text;
         // Basic heuristic for HF download URL if user provides repo/name
         downloadUrl =
-            'https://huggingface.co/${modelId}/resolve/main/${modelId.split('/').last}.gguf';
+            'https://huggingface.co/$modelId/resolve/main/${modelId.split('/').last}.gguf';
       } else {
         modelId = model!.id;
         final sdkModels = await _cactusLM.getModels();
@@ -324,20 +300,32 @@ class _MainScreenState extends State<MainScreen> {
         downloadUrl = sdkModel.downloadUrl;
       }
 
+      _serverLogs.add('[DOWNLOAD] URL: $downloadUrl');
       setState(() {
-        _logs[2] = downloadUrl;
-        _logs[3] = 'Synchronizing chunks...';
+        _logs.add('TARGET URL ACQUIRED');
+        _logs.add('PROTOCOL: HTTPS/GGUF');
+        _logs.add('CONNECTING TO: $downloadUrl');
+        _logs.add('ESTABLISHING SHAKEHAND...');
       });
 
-      _serverLogs.add('[DOWNLOAD] URL: $downloadUrl');
       final startTime = DateTime.now();
+      DateTime lastLogTime = DateTime.now().subtract(
+        const Duration(seconds: 4),
+      );
 
       await _cactusLM.downloadModel(
         model: modelId,
         downloadProcessCallback:
             (double? progress, String statusMessage, bool isError) {
-              if (statusMessage.isNotEmpty)
+              final now = DateTime.now();
+              // Only update the live log every 5 seconds or on error
+              if (statusMessage.isNotEmpty &&
+                  (now.difference(lastLogTime).inSeconds >= 5 || isError)) {
                 _serverLogs.add('[BRIDGE] $statusMessage');
+                setState(() => _logs.add('SYNC: $statusMessage'));
+                lastLogTime = now;
+              }
+
               setState(() {
                 if (progress != null) _progress = (progress * 100).toInt();
                 if (isError) {
@@ -358,6 +346,104 @@ class _MainScreenState extends State<MainScreen> {
         if (!isHf) model!.isDownloaded = true;
         _isDownloadLocked = false;
       });
+      // Copy to Quest Download folder
+      try {
+        _serverLogs.add('[SYSTEM] Exporting weight to public storage...');
+        final appDir = await getApplicationDocumentsDirectory();
+
+        final fileName = isHf
+            ? '${modelId.split('/').last}.gguf'
+            : '$modelId.gguf';
+
+        // Potential source paths based on common Cactus patterns
+        // We also check the cache directory and files directory
+        final cacheDir = await getTemporaryDirectory();
+
+        final possiblePaths = [
+          p.join(appDir.path, fileName),
+          p.join(appDir.path, 'models', fileName),
+          p.join(appDir.path, 'cactus', 'models', fileName),
+          p.join(cacheDir.path, fileName),
+          p.join(cacheDir.path, 'models', fileName),
+        ];
+
+        File? sourceFile;
+        _serverLogs.add(
+          '[DEBUG] Searching in ${possiblePaths.length} locations...',
+        );
+
+        for (final path in possiblePaths) {
+          final file = File(path);
+          if (await file.exists()) {
+            sourceFile = file;
+            _serverLogs.add('[DEBUG] Found file at: $path');
+            break;
+          }
+        }
+
+        // If not found in common spots, try a recursive search in app files
+        if (sourceFile == null) {
+          _serverLogs.add('[DEBUG] Deep searching app directory...');
+          try {
+            await for (final entity in appDir.list(recursive: true)) {
+              if (entity is File && entity.path.endsWith('.gguf')) {
+                sourceFile = entity;
+                _serverLogs.add(
+                  '[DEBUG] Located through deep search: ${entity.path}',
+                );
+                break;
+              }
+            }
+          } catch (_) {}
+        }
+
+        if (sourceFile != null) {
+          // Internal Shared Storage Root (matches user screenshot)
+          const publicRootPath = '/storage/emulated/0';
+          final publicDir = Directory(publicRootPath);
+
+          if (await publicDir.exists()) {
+            final targetPath = p.join(
+              publicRootPath,
+              p.basename(sourceFile.path),
+            );
+            _serverLogs.add(
+              '[SYSTEM] Copying ${sourceFile.lengthSync() >> 20}MB to Storage Root...',
+            );
+            await sourceFile.copy(targetPath);
+            _serverLogs.add('[SUCCESS] Exported to root: $targetPath');
+            _serverLogs.add(
+              '[INFO] You can now see this file in the main folder on your PC',
+            );
+            setState(() => _logs.add('EXPORTED TO STORAGE ROOT'));
+          } else {
+            _serverLogs.add(
+              '[WARNING] Internal storage root not found at $publicRootPath',
+            );
+            // Fallback to Download folder if root is somehow restricted
+            final downloadPath = p.join(publicRootPath, 'Download');
+            final downloadDir = Directory(downloadPath);
+            if (await downloadDir.exists()) {
+              final targetPath = p.join(
+                downloadPath,
+                p.basename(sourceFile.path),
+              );
+              await sourceFile.copy(targetPath);
+              _serverLogs.add('[SUCCESS] Exported to Downloads: $targetPath');
+            }
+          }
+        } else {
+          _serverLogs.add(
+            '[WARNING] Could not locate local weight file for export',
+          );
+          _serverLogs.add(
+            '[DEBUG] Checked dirs: ${appDir.path}, ${cacheDir.path}',
+          );
+        }
+      } catch (exportError) {
+        _serverLogs.add('[ERROR] Export failed: $exportError');
+      }
+
       _serverLogs.add('[SUCCESS] Model $modelId acquired');
       await _startupCheck(); // Refresh list
     } catch (e) {
@@ -453,7 +539,7 @@ class _MainScreenState extends State<MainScreen> {
             model: model,
             statusNotifier: _loadStatusNotifier,
             logsNotifier: _loadingLogsNotifier,
-            initialContextSize: _selectedContextSize,
+            initialContextSize: _selectedContextSize ?? 2048,
             onContextSelect: (size) => _selectedContextSize = size,
             onStartLoad: _executeLoad, // Pass the function
             onCancel: () {
@@ -553,9 +639,11 @@ class _MainScreenState extends State<MainScreen> {
       final router = shelf.Router()
         ..post('/v1/chat/completions', _handleChatCompletion)
         ..get('/v1/models', _handleListModels)
+        ..get('/v1/internal/devices', _handleListDevices)
+        ..get('/v1/internal/stats', _handleGetStats)
         ..get('/', _handleHealthCheck);
 
-      final handler = Pipeline()
+      final handler = const Pipeline()
           .addMiddleware(_corsHeaders())
           .addHandler(router.call);
 
@@ -621,14 +709,15 @@ class _MainScreenState extends State<MainScreen> {
 
       final List<ChatMessage> chatMessages = messages.map((m) {
         final content = m['content'] ?? '';
-        if (content.isNotEmpty)
+        if (content.isNotEmpty) {
           _serverLogs.add('  User: ${content.toString().split('\n').first}...');
+        }
         return ChatMessage(role: m['role'] ?? 'user', content: content);
       }).toList();
 
       if (!_cactusLM.isLoaded()) {
         // Fallback to mock for UI demonstration if no model loaded
-        final responseText =
+        const responseText =
             'Cactus AI Bridge is active. (MOCK RESPONSE - No weights loaded)';
         return Response.ok(
           jsonEncode({
@@ -786,6 +875,41 @@ class _MainScreenState extends State<MainScreen> {
     );
   }
 
+  Future<Response> _handleListDevices(Request request) async {
+    return Response.ok(
+      jsonEncode({
+        'object': 'list',
+        'data': _models
+            .map(
+              (m) => {
+                'id': '${m.targetUnit}${m.unitId}',
+                'type': m.targetUnit,
+                'pci_link': m.pciDeviceId,
+                'status': m.isSupported ? 'verified' : 'incompatible',
+              },
+            )
+            .toList(),
+      }),
+      headers: {'Content-Type': 'application/json'},
+    );
+  }
+
+  Future<Response> _handleGetStats(Request request) async {
+    return Response.ok(
+      jsonEncode({
+        'uptime': 0, // Need to implement real uptime tracking
+        'request_count': _requestCount,
+        'tokens_in': _totalTokensIn,
+        'tokens_out': _totalTokensOut,
+        'earned': _tokensEarned,
+        'token_speed': 0.0,
+        'pending_requests': _pendingConnections,
+        'model_id': _activeModelId ?? 'none',
+      }),
+      headers: {'Content-Type': 'application/json'},
+    );
+  }
+
   Future<Response> _handleHealthCheck(Request request) async {
     return Response.ok(
       jsonEncode({'status': 'running'}),
@@ -915,7 +1039,7 @@ class _MainScreenState extends State<MainScreen> {
                         ),
                         // Spinning loader
                         if (!_isWaitingForStart)
-                          SizedBox(
+                          const SizedBox(
                             width: 12,
                             height: 12,
                             child: CircularProgressIndicator(
@@ -1040,200 +1164,190 @@ class _MainScreenState extends State<MainScreen> {
     );
   }
 
-  Widget _buildLockScreen() {
-    return Container(
-      color: const Color(0xFF0C0D0C),
-      padding: const EdgeInsets.all(24),
-      child: SafeArea(
-        child: Column(
-          children: [
-            const Spacer(),
-            // Spinning icon
-            TweenAnimationBuilder<double>(
-              tween: Tween(begin: 0, end: 1),
-              duration: const Duration(seconds: 2),
-              builder: (context, value, child) {
-                return Transform.rotate(
-                  angle: value * 6.28 * 10,
-                  child: const Icon(
-                    Icons.refresh,
-                    size: 48,
-                    color: Color(0xFF22C55E),
-                  ),
-                );
-              },
-            ),
-            const SizedBox(height: 16),
-            Text(
-              _isDownloadLocked ? 'NEURAL TRANSMISSION' : 'PERFORMANCE AUDIT',
-              style: const TextStyle(
-                fontSize: 24,
-                fontWeight: FontWeight.w900,
-                fontStyle: FontStyle.italic,
-                color: Colors.white,
+// In the state class, let's add a scroll controller
+final ScrollController _lockScrollController = ScrollController();
+
+void _scrollToBottom() {
+  if (_lockScrollController.hasClients) {
+    _lockScrollController.animateTo(
+      _lockScrollController.position.maxScrollExtent,
+      duration: const Duration(milliseconds: 300),
+      curve: Curves.easeOut,
+    );
+  }
+}
+
+// Inside _buildLockScreen
+Widget _buildLockScreen() {
+  // Call scroll to bottom if download is active
+  WidgetsBinding.instance.addPostFrameCallback((_) => _scrollToBottom());
+
+  return Container(
+    color: const Color(0xFF0C0D0C),
+    padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 12),
+    child: SafeArea(
+      child: Column(
+        children: [
+          const SizedBox(height: 10),
+          Row(
+            mainAxisAlignment: MainAxisAlignment.center,
+            children: [
+              TweenAnimationBuilder<double>(
+                tween: Tween(begin: 0, end: 1),
+                duration: const Duration(seconds: 2),
+                builder: (context, value, child) {
+                  return Transform.rotate(
+                    angle: value * 6.28,
+                    child: const Icon(
+                      Icons.sync,
+                      size: 24,
+                      color: Color(0xFF22C55E),
+                    ),
+                  );
+                },
               ),
-            ),
-            const SizedBox(height: 8),
-            Text(
-              'SYSTEM LOCK ACTIVE',
-              style: TextStyle(
-                fontSize: 10,
-                fontWeight: FontWeight.w800,
-                color: Colors.grey[600],
-                letterSpacing: 2,
+              const SizedBox(width: 12),
+              const Text(
+                'NEURAL TRANSMISSION',
+                style: TextStyle(
+                  fontSize: 18,
+                  fontWeight: FontWeight.w900,
+                  fontStyle: FontStyle.italic,
+                  color: Colors.white,
+                  letterSpacing: 2,
+                ),
               ),
+            ],
+          ),
+          const SizedBox(height: 16),
+          // Progress Section
+          Container(
+            padding: const EdgeInsets.all(16),
+            decoration: BoxDecoration(
+              color: Colors.white.withOpacity(0.03),
+              borderRadius: BorderRadius.circular(16),
+              border: Border.all(color: Colors.white.withOpacity(0.05)),
             ),
-            const SizedBox(height: 32),
-            // Progress
-            Row(
-              mainAxisAlignment: MainAxisAlignment.spaceBetween,
+            child: Column(
               children: [
-                Text(
-                  _isDownloadLocked
-                      ? 'SYNCHRONIZING WEIGHTS'
-                      : 'CALCULATING METRICS',
-                  style: const TextStyle(
-                    fontSize: 10,
-                    fontWeight: FontWeight.w900,
-                    color: Color(0xFF22C55E),
-                    letterSpacing: 1,
-                  ),
-                ),
-                Text(
-                  '$_progress%',
-                  style: const TextStyle(
-                    fontSize: 10,
-                    fontWeight: FontWeight.w900,
-                    color: Color(0xFF22C55E),
-                  ),
-                ),
-              ],
-            ),
-            const SizedBox(height: 8),
-            Container(
-              height: 6,
-              decoration: BoxDecoration(
-                color: Colors.white.withOpacity(0.05),
-                borderRadius: BorderRadius.circular(3),
-                border: Border.all(color: Colors.white.withOpacity(0.05)),
-              ),
-              child: Align(
-                alignment: Alignment.centerLeft,
-                child: FractionallySizedBox(
-                  widthFactor: _progress / 100,
-                  child: Container(
-                    decoration: BoxDecoration(
-                      color: const Color(0xFF22C55E),
-                      borderRadius: BorderRadius.circular(3),
-                      boxShadow: [
-                        BoxShadow(
-                          color: const Color(0xFF22C55E).withOpacity(0.5),
-                          blurRadius: 8,
-                        ),
-                      ],
-                    ),
-                  ),
-                ),
-              ),
-            ),
-            const SizedBox(height: 32),
-            // Log area
-            Expanded(
-              child: Container(
-                width: double.infinity,
-                padding: const EdgeInsets.all(16),
-                decoration: BoxDecoration(
-                  color: Colors.black.withOpacity(0.5),
-                  borderRadius: BorderRadius.circular(20),
-                  border: Border.all(color: Colors.white.withOpacity(0.1)),
-                ),
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
+                Row(
+                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
                   children: [
-                    Row(
-                      children: [
-                        Icon(Icons.terminal, size: 12, color: Colors.grey[700]),
-                        const SizedBox(width: 8),
-                        Text(
-                          _isDownloadLocked ? 'DOWNLOAD LOG' : 'BENCHMARK FEED',
-                          style: TextStyle(
-                            fontSize: 10,
-                            fontWeight: FontWeight.w900,
-                            color: Colors.grey[700],
-                            letterSpacing: 1,
-                          ),
-                        ),
-                      ],
+                    const Text(
+                      'BANDWIDTH SYNC',
+                      style: TextStyle(
+                        fontSize: 10,
+                        fontWeight: FontWeight.w900,
+                        color: Color(0xFF22C55E),
+                      ),
                     ),
-                    const Divider(color: Colors.white10),
-                    Expanded(
-                      child: ListView.builder(
-                        itemCount: _logs.length,
-                        itemBuilder: (context, index) {
-                          return Padding(
-                            padding: const EdgeInsets.symmetric(vertical: 2),
-                            child: Row(
-                              children: [
-                                Text(
-                                  '[${index.toString().padLeft(3, '0')}]',
-                                  style: TextStyle(
-                                    fontSize: 10,
-                                    fontFamily: 'monospace',
-                                    color: Colors.grey[800],
-                                  ),
-                                ),
-                                const SizedBox(width: 8),
-                                Expanded(
-                                  child: Text(
-                                    _logs[index],
-                                    style: TextStyle(
-                                      fontSize: 10,
-                                      fontFamily: 'monospace',
-                                      color: const Color(
-                                        0xFF22C55E,
-                                      ).withOpacity(0.8),
-                                    ),
-                                  ),
-                                ),
-                              ],
-                            ),
-                          );
-                        },
+                    Text(
+                      '$_progress%',
+                      style: const TextStyle(
+                        fontSize: 14,
+                        fontWeight: FontWeight.w900,
+                        color: Color(0xFF22C55E),
                       ),
                     ),
                   ],
                 ),
+                const SizedBox(height: 12),
+                ClipRRect(
+                  borderRadius: BorderRadius.circular(4),
+                  child: LinearProgressIndicator(
+                    value: _progress / 100,
+                    backgroundColor: Colors.white.withOpacity(0.05),
+                    valueColor: const AlwaysStoppedAnimation(Color(0xFF22C55E)),
+                    minHeight: 8,
+                  ),
+                ),
+              ],
+            ),
+          ),
+          const SizedBox(height: 16),
+          // Log area - NOW EXPANDED
+          Expanded(
+            child: Container(
+              width: double.infinity,
+              padding: const EdgeInsets.all(16),
+              decoration: BoxDecoration(
+                color: Colors.black,
+                borderRadius: BorderRadius.circular(20),
+                border: Border.all(color: const Color(0xFF22C55E).withOpacity(0.2)),
+                boxShadow: [
+                  BoxShadow(
+                    color: const Color(0xFF22C55E).withOpacity(0.05),
+                    blurRadius: 20,
+                  ),
+                ],
+              ),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Row(
+                    children: [
+                      const Icon(Icons.terminal, size: 14, color: Color(0xFF22C55E)),
+                      const SizedBox(width: 8),
+                      Text(
+                        'REAL-TIME UPLINK FEED',
+                        style: TextStyle(
+                          fontSize: 10,
+                          fontWeight: FontWeight.w900,
+                          color: const Color(0xFF22C55E).withOpacity(0.6),
+                          letterSpacing: 1,
+                        ),
+                      ),
+                    ],
+                  ),
+                  const Divider(color: Colors.white10, height: 20),
+                  Expanded(
+                    child: ListView.builder(
+                      controller: _lockScrollController,
+                      itemCount: _logs.length,
+                      itemBuilder: (context, index) {
+                        return Padding(
+                          padding: const EdgeInsets.symmetric(vertical: 4),
+                          child: Row(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              const Text(
+                                '>',
+                                style: TextStyle(
+                                  fontSize: 12,
+                                  fontWeight: FontWeight.w900,
+                                  color: Color(0xFF22C55E),
+                                ),
+                              ),
+                              const SizedBox(width: 10),
+                              Expanded(
+                                child: Text(
+                                  _logs[index],
+                                  style: const TextStyle(
+                                    fontFamily: 'monospace',
+                                    fontSize: 12,
+                                    color: Colors.white,
+                                    height: 1.4,
+                                  ),
+                                ),
+                              ),
+                            ],
+                          ),
+                        );
+                      },
+                    ),
+                  ),
+                ],
               ),
             ),
-            const SizedBox(height: 24),
-            // Cancel button
-            SizedBox(
-              width: double.infinity,
-              child: ElevatedButton(
-                onPressed: () => setState(() {
+          ),
+          const SizedBox(height: 16),
+          SizedBox(
+            width: double.infinity,
+            child: OutlinedButton(
+              onPressed: () {
+                setState(() {
                   _isDownloadLocked = false;
                   _isBenchmarking = false;
-                  _logs = [];
-                }),
-                style: ElevatedButton.styleFrom(
-                  backgroundColor: Colors.red.withOpacity(0.1),
-                  foregroundColor: Colors.red,
-                  padding: const EdgeInsets.symmetric(vertical: 20),
-                  shape: RoundedRectangleBorder(
-                    borderRadius: BorderRadius.circular(20),
-                    side: BorderSide(color: Colors.red.withOpacity(0.2)),
-                  ),
-                ),
-                child: const Text(
-                  'CANCEL TASK',
-                  style: TextStyle(
-                    fontWeight: FontWeight.w900,
-                    letterSpacing: 2,
-                  ),
-                ),
-              ),
-            ),
-            const Spacer(),
           ],
         ),
       ),
@@ -1531,9 +1645,9 @@ class _MainScreenState extends State<MainScreen> {
                     color: Colors.white,
                     borderRadius: BorderRadius.circular(16),
                   ),
-                  child: Row(
+                  child: const Row(
                     children: [
-                      const Icon(
+                      Icon(
                         Icons.play_arrow,
                         size: 28,
                         color: Color(0xFF22C55E),
@@ -1572,11 +1686,13 @@ class _MainScreenState extends State<MainScreen> {
                             (m) => DropdownMenuItem(
                               value: m.id,
                               child: Text(
-                                '${m.name} ${m.isDownloaded ? '✓' : '(${m.size})'}',
+                                '${m.isSupported ? "" : "* "}${m.name} ${m.isDownloaded ? "✓" : "(${m.size})"}${m.isSupported ? "" : " [UNSUPPORTED]"}',
                                 style: TextStyle(
-                                  color: m.isDownloaded
-                                      ? const Color(0xFF22C55E)
-                                      : Colors.grey[400],
+                                  color: !m.isSupported
+                                      ? Colors.red.withOpacity(0.6)
+                                      : (m.isDownloaded
+                                            ? const Color(0xFF22C55E)
+                                            : Colors.grey[400]),
                                   fontWeight: FontWeight.w600,
                                 ),
                               ),
@@ -1648,6 +1764,25 @@ class _MainScreenState extends State<MainScreen> {
                 style: const TextStyle(fontSize: 14, color: Colors.blue),
                 decoration: const InputDecoration(
                   hintText: 'Huggingface Repo ID (e.g. Qwen/Qwen2.5-1.5B-GGUF)',
+                  hintStyle: TextStyle(color: Colors.grey),
+                  border: InputBorder.none,
+                ),
+              ),
+            ),
+            const SizedBox(height: 12),
+            Container(
+              padding: const EdgeInsets.symmetric(horizontal: 16),
+              decoration: BoxDecoration(
+                color: Colors.white.withOpacity(0.05),
+                borderRadius: BorderRadius.circular(16),
+                border: Border.all(color: Colors.blue.withOpacity(0.1)),
+              ),
+              child: TextField(
+                controller: _hfTokenController,
+                obscureText: true,
+                style: const TextStyle(fontSize: 14, color: Colors.blue),
+                decoration: const InputDecoration(
+                  hintText: 'HF Access Token (Optional for public models)',
                   hintStyle: TextStyle(color: Colors.grey),
                   border: InputBorder.none,
                 ),
@@ -1725,10 +1860,36 @@ class _MainScreenState extends State<MainScreen> {
                       const SizedBox(width: 16),
                       Expanded(
                         child: _buildMetaItem(
-                          Icons.storage,
-                          'STORAGE',
-                          model.size,
-                          Colors.pink,
+                          Icons.settings_input_component,
+                          'NPU STATUS',
+                          model.isSupported ? 'ACTIVE' : 'INCOMPATIBLE',
+                          model.isSupported
+                              ? const Color(0xFF22C55E)
+                              : Colors.red,
+                        ),
+                      ),
+                    ],
+                  ),
+                  const SizedBox(height: 16),
+                  Row(
+                    children: [
+                      Expanded(
+                        child: _buildMetaItem(
+                          Icons.router,
+                          'PCI LINK',
+                          model.pciDeviceId,
+                          Colors.orange,
+                        ),
+                      ),
+                      const SizedBox(width: 16),
+                      Expanded(
+                        child: _buildMetaItem(
+                          Icons.developer_board,
+                          'TARGET DEVICE',
+                          '${model.targetUnit}${model.unitId}',
+                          model.isSupported
+                              ? const Color(0xFF22C55E)
+                              : Colors.red,
                         ),
                       ),
                     ],
@@ -2657,10 +2818,4 @@ class _MainScreenState extends State<MainScreen> {
     _inputController.dispose();
     super.dispose();
   }
-}
-
-class Message {
-  final String role;
-  final String text;
-  Message({required this.role, required this.text});
 }

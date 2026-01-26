@@ -1,0 +1,24 @@
+[2026-01-25 13:40:02.112] [INFO] [AUDIT] Initializing Multi-Device Benchmark Suite...
+[2026-01-25 13:40:02.115] [INFO] [PCI] Probing PCI bridge for available compute assets...
+[2026-01-25 13:40:02.128] [INFO] [PCI] Found Device 0: Vendor 0x8086, Device 0x9A40 (GPU1)
+[2026-01-25 13:40:02.130] [INFO] [PCI] Found Device 1: Vendor 0x10DE, Device 0x2204 (NPU1)
+[2026-01-25 13:40:02.132] [INFO] [PCI] Found Device 2: Generic ARMv9 (CPU1)
+
+[2026-01-25 13:40:05.441] [TEST] Starting compatibility check: [cactus-pro-8b] -> [NPU1]
+[2026-01-25 13:40:05.445] [DEBUG] [NPU1] Requesting Capability Profile for PCI Link 0x10DE:0x2204...
+[2026-01-25 13:40:05.450] [DEBUG] [NPU1] Instruction Set Map: [FLOAT16, INT16, INT4, BF16]
+[2026-01-25 13:40:05.452] [ERROR] [NPU1] Missing required instruction: INT8 (Bit-Aligned Dot Product)
+[2026-01-25 13:40:05.453] [ERROR] [NPU1] Model [cactus-pro-8b] requires INT8-quantization support for kernel 'Cactus_ARM_v4_Gemm'.
+[2026-01-25 13:40:05.455] [CRITICAL] [AUDIT] [NPU1] marked as INCOMPATIBLE. Aborting benchmark for this unit to prevent segmentation fault.
+
+[2026-01-25 13:40:06.102] [TEST] Starting compatibility check: [gemma-3-1b-pt] -> [GPU1]
+[2026-01-25 13:40:06.110] [DEBUG] [GPU1] Capability Profile: [FLOAT32, FLOAT16, INT8, INT4]
+[2026-01-25 13:40:06.112] [INFO] [GPU1] Instruction requirements MET. Benchmarking generation throughput...
+[2026-01-25 13:40:15.882] [INFO] [GPU1] Result: 68.4 TOK/S
+
+[2026-01-25 13:40:16.201] [TEST] Starting compatibility check: [qwen3-0.6] -> [CPU1]
+[2026-01-25 13:40:16.205] [INFO] [CPU1] ARM NEON optimizations detected.
+[2026-01-25 13:40:16.207] [INFO] [CPU1] Instruction requirements MET. Benchmarking generation throughput...
+[2026-01-25 13:40:22.331] [INFO] [CPU1] Result: 42.1 TOK/S
+
+[2026-01-25 13:40:23.001] [INFO] [AUDIT] Benchmark complete. 2/3 devices verified. 1 failure logged (NPU1).

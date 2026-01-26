@@ -157,17 +157,35 @@ const App: React.FC = () => {
   const [copied, setCopied] = useState(false);
   const [uptime, setUptime] = useState(0);
   const [requestCount, setRequestCount] = useState(0);
+  const [tokensIn, setTokensIn] = useState(0);
+  const [tokensOut, setTokensOut] = useState(0);
+  const [earned, setEarned] = useState(0);
+  const [tokenSpeed, setTokenSpeed] = useState(0);
+  const [pendingReq, setPendingReq] = useState(0);
 
+  // Real-time monitoring via polling the local bridge server (Shelf API)
   useEffect(() => {
     let interval: number;
     if (isOpenAIServerStarted) {
-      interval = window.setInterval(() => {
+      interval = window.setInterval(async () => {
+        try {
+          const res = await fetch('http://localhost:8080/v1/internal/stats');
+          if (res.ok) {
+            const data = await res.json();
+            setRequestCount(data.request_count);
+            setTokensIn(data.tokens_in);
+            setTokensOut(data.tokens_out);
+            setEarned(data.earned);
+            setTokenSpeed(data.token_speed);
+            setPendingReq(data.pending_requests);
+          }
+        } catch (e) {
+          // Network error - probably server not reachable
+        }
         setUptime(prev => prev + 1);
-        if (Math.random() > 0.7) setRequestCount(prev => prev + 1);
       }, 1000);
     } else {
       setUptime(0);
-      setRequestCount(0);
     }
     return () => clearInterval(interval);
   }, [isOpenAIServerStarted]);
@@ -218,53 +236,26 @@ const App: React.FC = () => {
     setIsDownloadLocked(true);
     setProgress(0);
     const targetName = isHuggingFaceMode ? hfInput : allModels.find(m => m.id === viewedModelId)?.name || 'Unknown';
-    setLogs([`Initializing Bridge...`, `Connecting to Weights API...`, `Downloading: ${targetName}`]);
-
-    let p = 0;
-    const interval = window.setInterval(() => {
-      p += Math.random() * 5;
-      if (p >= 100) {
-        p = 100;
-        window.clearInterval(interval);
-        setProgress(100);
-        setLogs(prev => [...prev, `[SUCCESS] Weights verified.`, `Node cache updated.`]);
-        setTimeout(() => {
-          setAllModels(prev => {
-            const id = isHuggingFaceMode ? hfInput : viewedModelId;
-            const existing = prev.find(m => m.id === id);
-            if (existing) return prev.map(m => m.id === id ? { ...m, isDownloaded: true } : m);
-            return [...prev, { id, name: targetName, size: 'HF_WEIGHTS', isDownloaded: true }];
-          });
-          setIsDownloadLocked(false);
-          setLogs([]);
-        }, 1200);
-      } else {
-        setProgress(Math.floor(p));
-        if (Math.random() > 0.8) setLogs(prev => [...prev, `Chunk ${Math.floor(Math.random() * 1000)} OK...`]);
-      }
-    }, 300);
+    setLogs([
+      `[SYSTEM] De-simulation Active`,
+      `[INFO] Target: ${targetName}`,
+      `[ERROR] Manual weight synchronization required on target device.`,
+      `[DONE] Terminal Bridge Standby.`
+    ]);
+    setProgress(0);
+    // Removed fake Math.random progress loop
   };
 
   const runBenchmark = () => {
     setIsBenchmarking(true);
     setProgress(0);
-    setLogs([`Starting Performance Audit...`, `Waking device cores...`, `Loading ${activeModelId} into test buffer...`]);
-    let p = 0;
-    const interval = window.setInterval(() => {
-      p += 4;
-      if (p >= 100) {
-        p = 100;
-        window.clearInterval(interval);
-        setProgress(100);
-        setLogs(prev => [...prev, `[COMPLETED] Audit Finished.`, `Tokens/sec: 18.4`, `Memory Overhead: 2.1GB`, `Optimization: Recommended.`]);
-        setTimeout(() => { setIsBenchmarking(false); setLogs([]); }, 1500);
-      } else {
-        setProgress(p);
-        if (p === 20) setLogs(prev => [...prev, `Stress testing context window... (Passed)`]);
-        if (p === 50) setLogs(prev => [...prev, `Measuring prompt ingestion speed... (185 t/s)`]);
-        if (p === 80) setLogs(prev => [...prev, `Analyzing thermal dissipation... (Stable)`]);
-      }
-    }, 800);
+    setLogs([
+      `[SYSTEM] Performance Audit Requested`,
+      `[INFO] Target Node: ${activeModelId}`,
+      `[ERROR] Benchmark hardware bridge not yet connected.`,
+      `Please run audit on local hardware.`,
+    ]);
+    // Removed fake Math.random progress loop
   };
 
   const deleteModel = (id: string) => {
@@ -294,7 +285,7 @@ const App: React.FC = () => {
   // Header Logic
   const headerIcon = isOpenAIServerStarted ? <Network size={22} className="text-blue-500" strokeWidth={3} /> : <Zap size={22} className={boltColor} fill="currentColor" strokeWidth={3} />;
   const headerIconBg = isOpenAIServerStarted ? 'bg-white' : statusBg;
-  const headerTitleColor = isOpenAIServerStarted ? 'text-blue-500' : 'text-white';
+  const headerTitleColor = 'text-white';
   const headerSubtitleColor = isOpenAIServerStarted ? 'text-blue-400' : 'text-green-500';
 
   return (
@@ -572,7 +563,7 @@ const App: React.FC = () => {
                 <div className="bg-black/40 p-6 space-y-2">
                   <div className="flex items-center justify-between">
                     <div className="flex items-center gap-4">
-                      <div className={`p-3 rounded-xl ${isOpenAIServerStarted ? 'bg-blue-500 text-black' : 'bg-white/5 text-gray-500'}`}>
+                      <div className={`p-3 rounded-xl ${isOpenAIServerStarted ? 'bg-white text-blue-500' : 'bg-white/5 text-gray-500'}`}>
                         <Server size={24} strokeWidth={2.5} />
                       </div>
                       <div>
@@ -615,25 +606,25 @@ const App: React.FC = () => {
                     <div className="grid grid-cols-2 gap-4 mb-4">
                       <div className="p-3 bg-white/5 rounded-2xl text-center space-y-1">
                         <p className="text-[9px] font-black text-gray-500 uppercase">Pending Req</p>
-                        <p className="text-xl font-black text-yellow-400 font-mono tracking-tighter">0</p>
+                        <p className="text-xl font-black text-yellow-400 font-mono tracking-tighter">{pendingReq}</p>
                       </div>
                       <div className="p-3 bg-white/5 rounded-2xl text-center space-y-1">
                         <p className="text-[9px] font-black text-gray-500 uppercase">Token/s</p>
-                        <p className="text-xl font-black text-yellow-400 font-mono tracking-tighter">45.5</p>
+                        <p className="text-xl font-black text-yellow-400 font-mono tracking-tighter">{tokenSpeed.toFixed(1)}</p>
                       </div>
                     </div>
                     <div className="grid grid-cols-3 divide-x divide-white/5 border border-white/5 rounded-2xl bg-black/20">
                       <div className="p-3 text-center space-y-1">
                         <p className="text-[8px] font-black text-gray-600 uppercase">Tok In</p>
-                        <p className="text-sm font-black text-white font-mono">{requestCount * 124}</p>
+                        <p className="text-sm font-black text-white font-mono">{tokensIn}</p>
                       </div>
                       <div className="p-3 text-center space-y-1">
                         <p className="text-[8px] font-black text-gray-600 uppercase">Tok Out</p>
-                        <p className="text-sm font-black text-white font-mono">{requestCount * 482}</p>
+                        <p className="text-sm font-black text-white font-mono">{tokensOut}</p>
                       </div>
                       <div className="p-3 text-center space-y-1">
                         <p className="text-[8px] font-black text-gray-600 uppercase">Earned</p>
-                        <p className="text-sm font-black text-blue-400 font-mono">{(requestCount * (124 + 482) * 0.9).toFixed(0)} <span className="text-[8px] text-gray-500">TOKENS</span></p>
+                        <p className="text-sm font-black text-blue-400 font-mono">{earned} <span className="text-[8px] text-gray-500">TOKENS</span></p>
                       </div>
                     </div>
                   </div>
@@ -669,7 +660,7 @@ const App: React.FC = () => {
           <div className={`p-4 rounded-3xl -mt-12 transition-all mx-auto w-fit shadow-xl ${activeTab === 'live' ? 'bg-green-500 text-black border-4 border-[#0c0d0c] scale-110' : 'bg-zinc-900 text-gray-500'}`}>
             <Mic size={24} strokeWidth={2.5} />
           </div>
-          <span className={`text-[9px] mt-2 font-black uppercase block text-center ${activeTab === 'live' ? 'text-green-500' : 'text-gray-600'}`}>Live</span>
+          <span className={`text-[9px] mt-2 font-black uppercase block text-center ${activeTab === 'live' ? 'text-green-500' : 'text-gray-600'}`}>Live <span className="text-[7px] opacity-50">(PREVIEW)</span></span>
         </button>
         <button onClick={() => !isOpenAIServerStarted && setActiveTab('sensors')} className={`flex flex-col items-center gap-1 flex-1 transition-all ${isOpenAIServerStarted ? 'opacity-50 grayscale pointer-events-none' : ''} ${activeTab === 'sensors' ? 'text-green-500 scale-105' : 'text-gray-600'}`}>
           <Activity size={22} /><span className="text-[9px] font-black uppercase">Sensors</span>

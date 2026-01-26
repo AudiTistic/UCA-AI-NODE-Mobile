@@ -1,0 +1,77 @@
+{
+    "schemaVersion": "1.0",
+    "root": {
+        "name": "CACTUS AI",
+        "description": "Android-native local AI node with OpenAI-compatible bridge.",
+        "status": "PARTIAL",
+        "children": [
+            {
+                "name": "CORE.LLM",
+                "description": "Local LLM inference management using CactusLM SDK.",
+                "status": "COMPLETED",
+                "children": [
+                    {
+                        "name": "MODEL.REPOSITORY",
+                        "description": "Dynamic weight registry and local storage management.",
+                        "status": "COMPLETED",
+                        "children": [
+                            {
+                                "name": "MODEL.DOWNLOAD",
+                                "description": "Network synchronization of GGUF model weights.",
+                                "status": "COMPLETED"
+                            },
+                            {
+                                "name": "MODEL.SUPPORT_VALIDATION",
+                                "description": "Validation of Requested Model against Target Device (NPU/GPU/CPU/XPU) via PCI Device ID and Numeric Unit Identifier mapping.",
+                                "status": "COMPLETED"
+                            }
+                        ]
+                    },
+                    {
+                        "name": "MODEL.INITIALIZE",
+                        "description": "VRAM allocation and model loading sequence.",
+                        "status": "COMPLETED"
+                    },
+                    {
+                        "name": "BENCHMARK.SUITE",
+                        "description": "Automated performance auditing of all linguistic devices (CPU1, GPU1, etc.) against model weight compatibility.",
+                        "status": "COMPLETED"
+                    }
+                ]
+            },
+            {
+                "name": "BRIDGE.OPENAI",
+                "description": "Local HTTP server providing OpenAI-compatible endpoints.",
+                "status": "COMPLETED",
+                "children": [
+                    {
+                        "name": "SERVER.STATUS",
+                        "description": "Real-time monitoring of node connection and uptime.",
+                        "status": "COMPLETED"
+                    },
+                    {
+                        "name": "SERVER.DEVICE_DISCOVERY",
+                        "description": "API endpoint (/v1/internal/devices) returning validated linguistic identifiers (CPU1, GPU1) linked to specific validated hardware chips.",
+                        "status": "COMPLETED"
+                    }
+                ]
+            },
+            {
+                "name": "INTERFACE.LIVE",
+                "description": "Neural Audio Bridge for voice-to-voice interaction.",
+                "status": "PARTIAL"
+            },
+            {
+                "name": "INTERFACE.SENSORS",
+                "description": "Hardware telemetry (Battery/Geo) integration.",
+                "status": "COMPLETED"
+            }
+        ]
+    },
+    "statusDefinitions": {
+        "COMPLETED": "Production ready, fully working.",
+        "PARTIAL": "Some parts working; not fully completed or validated.",
+        "SIMULATED": "No real function; mimics behavior for testing/demo.",
+        "NOT_IMPLEMENTED": "No working code/path available."
+    }
+}

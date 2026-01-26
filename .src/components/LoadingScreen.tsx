@@ -25,17 +25,15 @@ export const LoadingScreen: React.FC<LoadingScreenProps> = ({ model, onCancel, o
 
     const startLoad = () => {
         setStatus('loading');
-        setLogs(['Initializing Neural Pipeline...', 'Allocating memory tensors...']);
-
-        // Simulate loading process
-        setTimeout(() => addLog(`Configuring context: ${selectedContext}tk...`), 800);
-        setTimeout(() => addLog('Requesting system resource lock...'), 1500);
-        setTimeout(() => addLog('Loading weights into VRAM...'), 2500);
-        setTimeout(() => {
-            addLog('DEVICE SYNC COMPLETE');
-            addLog('Ready for inference.');
-            setStatus('success');
-        }, 4000);
+        setLogs([
+            '[SYSTEM] Load Sequence Initialized',
+            `[INFO] Target: ${model.name}`,
+            `[INFO] Context: ${selectedContext}tk`,
+            '[ERROR] Device Bridge Offline. Manual initialization required on hardware.',
+            '[DONE] Synchronization Standby.'
+        ]);
+        // Set to error state or just leave in standby
+        setTimeout(() => setStatus('error'), 1000);
     };
 
     const getHeaderStyle = () => {
@@ -77,8 +75,8 @@ export const LoadingScreen: React.FC<LoadingScreenProps> = ({ model, onCancel, o
                                     key={size}
                                     onClick={() => setSelectedContext(size)}
                                     className={`px-4 py-3 rounded-xl border font-bold text-sm transition-all ${selectedContext === size
-                                            ? 'bg-green-500 text-black border-green-500'
-                                            : 'bg-white/5 text-gray-400 border-white/5 hover:bg-white/10'
+                                        ? 'bg-green-500 text-black border-green-500'
+                                        : 'bg-white/5 text-gray-400 border-white/5 hover:bg-white/10'
                                         }`}
                                 >
                                     {size >= 1024 ? `${size / 1024}k` : size}
@@ -126,8 +124,8 @@ export const LoadingScreen: React.FC<LoadingScreenProps> = ({ model, onCancel, o
                             <button
                                 onClick={status === 'loading' ? onCancel : startLoad}
                                 className={`flex-[2] py-4 font-black rounded-xl border uppercase tracking-widest transition-all active:scale-95 flex items-center justify-center gap-3 ${status === 'loading'
-                                        ? 'bg-red-500/10 text-red-500 border-red-500/20 hover:bg-red-500/20'
-                                        : 'bg-white text-black border-white hover:bg-gray-200'
+                                    ? 'bg-red-500/10 text-red-500 border-red-500/20 hover:bg-red-500/20'
+                                    : 'bg-white text-black border-white hover:bg-gray-200'
                                     }`}
                             >
                                 {status === 'loading' ? (
