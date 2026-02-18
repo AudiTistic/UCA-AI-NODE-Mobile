@@ -1,0 +1,10 @@
+{
+    "name": "aivr-ai-mobile-host",
+    "version": "1.0.0",
+    "description": "AIVR AI Mobile Host — Native C++ backend for Flutter mobile app",
+    "dependencies": [
+        "crow",
+        "nlohmann-json",
+        "spdlog"
+    ]
+}
