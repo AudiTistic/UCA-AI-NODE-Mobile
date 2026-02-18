@@ -1,0 +1,41 @@
+# AI-Mobile-Host — HARDWARE_SPEC.md
+
+## 1. System Requirements (Android)
+- **OS:** Android 11.0+.
+- **Chip:** ARMv8 (64-bit) required for C++ core performance.
+- **Sensors:** Accelerometer/Gyroscope (Required for tracking).
+
+## 2. System Requirements (iOS)
+- **OS:** iOS 15.0+.
+- **Hardware:** iPhone 12 or newer recommended for neural engine support.
+
+## 3. Memory (RAM)
+- **Usage:** < 256MB active.
+- **Background:** < 50MB idle in standby.
+
+## 4. Network Access
+- **Wi-Fi:** 5GHz (Strongly recommended for audio streaming).
+- **Data:** 4G/5G for remote command fallback.
+
+## 5. GPS / Location
+- High-accuracy mode must be enabled for "AIVR-Home" geofencing features.
+
+## 6. Biometric Hardware
+- Fingerprint scanner or IR Camera (FaceID) for secure system unlocking.
+
+## 7. Battery Impact
+- Active Tracking: ~5-10% per hour.
+- Background Mesh: < 1% per hour.
+
+## 8. Display Specs
+- Tailored for high-DPI Amoled screens (Dark mode default).
+- Dynamic Scaling for foldable devices.
+
+## 9. Camera Resolution
+- Minimal for SARAi "Vision" (e.g. 720p is enough for agent reasoning).
+
+## 10. Thermal Safety
+If phone temperature > 45°C:
+1. Disable IMU streaming.
+2. Dim screen.
+3. Pulse red notification.
