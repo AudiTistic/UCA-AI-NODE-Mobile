@@ -4,6 +4,19 @@
 
 Turn your Android phone into a high-performance OpenAI-compatible API server using Cactus LLM engine. Get 16-75 tok/s local inference with full /v1/chat/completions endpoint.
 
+## System Overview
+AIVR-AI-Mobile-Host integrates mobile devices as distributed inference nodes within the AIVR grid. By leveraging the Neural Processing Units (NPUs) in modern smartphones (Pixel, Samsung, iPhone), this system offloads lighter AI tasks from the main servers. It turns otherwise idle phones into active "neurons" that can handle chat completions, summarization, or simple logic tasks, reducing the load on the central GPUs.
+
+This component is crucial for the "Ubiquitous AI" vision of AIVR, ensuring that intelligence is not just centralized in a rack server but distributed across the physical environment. It adds resilience and scalability to the system, allowing for edge computing capabilities that are accessible via standard OpenAI APIs.
+
+## System Integrations
+This mobile mesh connects directly to the core orchestration and service layers.
+- [AIVR-App-Wifi-Mesh](../AIVR-App-Wifi-Mesh/README.md): Ensures the consistent low-latency network connectivity required for these mobile nodes to respond quickly.
+- [AIVR-AI-Orchestrator](../AIVR-AI-Orchestrator/README.md): Dispatches small, latency-tolerant tasks to these mobile nodes when the main cluster is busy.
+- [AIVR-Service-Relay](../AIVR-Service-Relay/README.md): Proxies requests from the public internet to these local mobile endpoints securely.
+- [AIVR-Host-Setup](../AIVR-Host-Setup/README.md): Configures the DHCP reservations to ensure these phones have static IPs for reliable API access.
+- [AIVR-AI-Worker](../AIVR-AI-Worker/README.md): Can fallback to these mobile nodes if the primary high-end models are unavailable.
+
 ## Why This Exists
 
 You probably found this repo because you, like me, realized nobody had built the obvious thing: **a phone-based LLM server with Cactus's ARM-tuned kernels AND OpenAI's API**.
