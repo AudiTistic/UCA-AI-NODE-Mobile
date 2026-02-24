@@ -56,7 +56,6 @@ class _MainScreenState extends State<MainScreen> {
   final TextEditingController _hfController = TextEditingController();
   final TextEditingController _hfTokenController =
       TextEditingController(); // New Token Controller
-  final bool _isLoading = false;
   final CactusLM _cactusLM = CactusLM();
   final _uuid = const Uuid();
 
@@ -81,9 +80,9 @@ class _MainScreenState extends State<MainScreen> {
   // bool _isModelLoading = false; // Removed as _loadStatus covers it
 
   // Server Stats
-  final int _pendingConnections = 0;
-  final int _totalTokensIn = 0;
-  final int _totalTokensOut = 0;
+  int _pendingConnections = 0;
+  int _totalTokensIn = 0;
+  int _totalTokensOut = 0;
   int get _tokensEarned => ((_totalTokensIn + _totalTokensOut) * 0.95).toInt();
 
   // Loading State
@@ -704,6 +703,7 @@ class _MainScreenState extends State<MainScreen> {
 
       setState(() {
         _requestCount++;
+        _pendingConnections++;
         _serverLogs.add('[REQUEST] Chat Completion (${messages.length} msgs)');
       });
 
@@ -719,6 +719,13 @@ class _MainScreenState extends State<MainScreen> {
         // Fallback to mock for UI demonstration if no model loaded
         const responseText =
             'Cactus AI Bridge is active. (MOCK RESPONSE - No weights loaded)';
+
+        if (mounted) {
+          setState(() {
+            if (_pendingConnections > 0) _pendingConnections--;
+          });
+        }
+
         return Response.ok(
           jsonEncode({
             'id': 'cmpl-${_uuid.v4()}',
@@ -745,6 +752,14 @@ class _MainScreenState extends State<MainScreen> {
             maxTokens: maxTokens,
           ),
         );
+
+        if (mounted) {
+          setState(() {
+            _totalTokensIn += cactusResponse.prefillTokens;
+            _totalTokensOut += cactusResponse.decodeTokens;
+            if (_pendingConnections > 0) _pendingConnections--;
+          });
+        }
 
         return Response.ok(
           jsonEncode({
@@ -792,6 +807,11 @@ class _MainScreenState extends State<MainScreen> {
         );
       }
     } catch (e) {
+      if (mounted) {
+        setState(() {
+          if (_pendingConnections > 0) _pendingConnections--;
+        });
+      }
       return Response.internalServerError(
         body: jsonEncode({
           'error': {'message': e.toString()},
@@ -838,6 +858,15 @@ class _MainScreenState extends State<MainScreen> {
 
       // Wait for final result for usage stats
       final finalResult = await streamedResult.result;
+
+      if (mounted) {
+        setState(() {
+          _totalTokensIn += finalResult.prefillTokens;
+          _totalTokensOut += finalResult.decodeTokens;
+          if (_pendingConnections > 0) _pendingConnections--;
+        });
+      }
+
       final doneData = {
         'id': completionId,
         'object': 'chat.completion.chunk',
@@ -856,6 +885,11 @@ class _MainScreenState extends State<MainScreen> {
       controller.add(utf8.encode('data: [DONE]\n\n'));
       await controller.close();
     } catch (e) {
+      if (mounted) {
+        setState(() {
+          if (_pendingConnections > 0) _pendingConnections--;
+        });
+      }
       controller.add(
         utf8.encode('data: ${jsonEncode({'error': e.toString()})}\n\n'),
       );
@@ -1348,11 +1382,16 @@ Widget _buildLockScreen() {
                 setState(() {
                   _isDownloadLocked = false;
                   _isBenchmarking = false;
-          ],
-        ),
+                });
+              },
+              child: const Text('CANCEL OPERATION'),
+            ),
+          ),
+        ],
       ),
-    );
-  }
+    ),
+  );
+}
 
   Widget _buildHeader() {
     final isOpenAI = _currentIndex == 4;
