@@ -406,8 +406,9 @@ class _MainScreenState extends State<MainScreen> {
               publicRootPath,
               p.basename(sourceFile.path),
             );
+            final sourceLength = await sourceFile.length();
             _serverLogs.add(
-              '[SYSTEM] Copying ${sourceFile.lengthSync() >> 20}MB to Storage Root...',
+              '[SYSTEM] Copying ${sourceLength >> 20}MB to Storage Root...',
             );
             await sourceFile.copy(targetPath);
             _serverLogs.add('[SUCCESS] Exported to root: $targetPath');
