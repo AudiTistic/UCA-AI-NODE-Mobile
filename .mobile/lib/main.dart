@@ -48,6 +48,7 @@ class _MainScreenState extends State<MainScreen> {
   int _currentIndex = 0;
   HttpServer? _server;
   bool _isServerRunning = false;
+  DateTime? _serverStartTime;
   String _ipAddress = '192.168.1.100';
   final int _port = 8080;
   int _requestCount = 0;
@@ -634,6 +635,7 @@ class _MainScreenState extends State<MainScreen> {
       setState(() {
         _isServerRunning = false;
         _server = null;
+        _serverStartTime = null;
       });
     } else {
       final router = shelf.Router()
@@ -667,7 +669,10 @@ class _MainScreenState extends State<MainScreen> {
 
         _server = await io.serve(handler, '0.0.0.0', _port);
         await WakelockPlus.enable(); // Keep device awake
-        setState(() => _isServerRunning = true);
+        setState(() {
+          _isServerRunning = true;
+          _serverStartTime = DateTime.now();
+        });
       } catch (e) {
         debugPrint('Server error: $e');
       }
@@ -895,9 +900,12 @@ class _MainScreenState extends State<MainScreen> {
   }
 
   Future<Response> _handleGetStats(Request request) async {
+    final uptime = _serverStartTime != null
+        ? DateTime.now().difference(_serverStartTime!).inSeconds
+        : 0;
     return Response.ok(
       jsonEncode({
-        'uptime': 0, // Need to implement real uptime tracking
+        'uptime': uptime,
         'request_count': _requestCount,
         'tokens_in': _totalTokensIn,
         'tokens_out': _totalTokensOut,
