@@ -77,7 +77,6 @@ class _MainScreenState extends State<MainScreen> {
 
   LoadStatus _loadStatus = LoadStatus.none;
   int? _selectedContextSize;
-  // bool _isModelLoading = false; // Removed as _loadStatus covers it
 
   // Server Stats
   int _pendingConnections = 0;
@@ -1198,200 +1197,208 @@ class _MainScreenState extends State<MainScreen> {
     );
   }
 
-// In the state class, let's add a scroll controller
-final ScrollController _lockScrollController = ScrollController();
+  // In the state class, let's add a scroll controller
+  final ScrollController _lockScrollController = ScrollController();
 
-void _scrollToBottom() {
-  if (_lockScrollController.hasClients) {
-    _lockScrollController.animateTo(
-      _lockScrollController.position.maxScrollExtent,
-      duration: const Duration(milliseconds: 300),
-      curve: Curves.easeOut,
-    );
+  void _scrollToBottom() {
+    if (_lockScrollController.hasClients) {
+      _lockScrollController.animateTo(
+        _lockScrollController.position.maxScrollExtent,
+        duration: const Duration(milliseconds: 300),
+        curve: Curves.easeOut,
+      );
+    }
   }
-}
 
-// Inside _buildLockScreen
-Widget _buildLockScreen() {
-  // Call scroll to bottom if download is active
-  WidgetsBinding.instance.addPostFrameCallback((_) => _scrollToBottom());
+  // Inside _buildLockScreen
+  Widget _buildLockScreen() {
+    // Call scroll to bottom if download is active
+    WidgetsBinding.instance.addPostFrameCallback((_) => _scrollToBottom());
 
-  return Container(
-    color: const Color(0xFF0C0D0C),
-    padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 12),
-    child: SafeArea(
-      child: Column(
-        children: [
-          const SizedBox(height: 10),
-          Row(
-            mainAxisAlignment: MainAxisAlignment.center,
-            children: [
-              TweenAnimationBuilder<double>(
-                tween: Tween(begin: 0, end: 1),
-                duration: const Duration(seconds: 2),
-                builder: (context, value, child) {
-                  return Transform.rotate(
-                    angle: value * 6.28,
-                    child: const Icon(
-                      Icons.sync,
-                      size: 24,
-                      color: Color(0xFF22C55E),
-                    ),
-                  );
-                },
-              ),
-              const SizedBox(width: 12),
-              const Text(
-                'NEURAL TRANSMISSION',
-                style: TextStyle(
-                  fontSize: 18,
-                  fontWeight: FontWeight.w900,
-                  fontStyle: FontStyle.italic,
-                  color: Colors.white,
-                  letterSpacing: 2,
-                ),
-              ),
-            ],
-          ),
-          const SizedBox(height: 16),
-          // Progress Section
-          Container(
-            padding: const EdgeInsets.all(16),
-            decoration: BoxDecoration(
-              color: Colors.white.withOpacity(0.03),
-              borderRadius: BorderRadius.circular(16),
-              border: Border.all(color: Colors.white.withOpacity(0.05)),
-            ),
-            child: Column(
+    return Container(
+      color: const Color(0xFF0C0D0C),
+      padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 12),
+      child: SafeArea(
+        child: Column(
+          children: [
+            const SizedBox(height: 10),
+            Row(
+              mainAxisAlignment: MainAxisAlignment.center,
               children: [
-                Row(
-                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                  children: [
-                    const Text(
-                      'BANDWIDTH SYNC',
-                      style: TextStyle(
-                        fontSize: 10,
-                        fontWeight: FontWeight.w900,
+                TweenAnimationBuilder<double>(
+                  tween: Tween(begin: 0, end: 1),
+                  duration: const Duration(seconds: 2),
+                  builder: (context, value, child) {
+                    return Transform.rotate(
+                      angle: value * 6.28,
+                      child: const Icon(
+                        Icons.sync,
+                        size: 24,
                         color: Color(0xFF22C55E),
                       ),
-                    ),
-                    Text(
-                      '$_progress%',
-                      style: const TextStyle(
-                        fontSize: 14,
-                        fontWeight: FontWeight.w900,
-                        color: Color(0xFF22C55E),
-                      ),
-                    ),
-                  ],
+                    );
+                  },
                 ),
-                const SizedBox(height: 12),
-                ClipRRect(
-                  borderRadius: BorderRadius.circular(4),
-                  child: LinearProgressIndicator(
-                    value: _progress / 100,
-                    backgroundColor: Colors.white.withOpacity(0.05),
-                    valueColor: const AlwaysStoppedAnimation(Color(0xFF22C55E)),
-                    minHeight: 8,
+                const SizedBox(width: 12),
+                const Text(
+                  'NEURAL TRANSMISSION',
+                  style: TextStyle(
+                    fontSize: 18,
+                    fontWeight: FontWeight.w900,
+                    fontStyle: FontStyle.italic,
+                    color: Colors.white,
+                    letterSpacing: 2,
                   ),
                 ),
               ],
             ),
-          ),
-          const SizedBox(height: 16),
-          // Log area - NOW EXPANDED
-          Expanded(
-            child: Container(
-              width: double.infinity,
+            const SizedBox(height: 16),
+            // Progress Section
+            Container(
               padding: const EdgeInsets.all(16),
               decoration: BoxDecoration(
-                color: Colors.black,
-                borderRadius: BorderRadius.circular(20),
-                border: Border.all(color: const Color(0xFF22C55E).withOpacity(0.2)),
-                boxShadow: [
-                  BoxShadow(
-                    color: const Color(0xFF22C55E).withOpacity(0.05),
-                    blurRadius: 20,
-                  ),
-                ],
+                color: Colors.white.withOpacity(0.03),
+                borderRadius: BorderRadius.circular(16),
+                border: Border.all(color: Colors.white.withOpacity(0.05)),
               ),
               child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
                   Row(
+                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
                     children: [
-                      const Icon(Icons.terminal, size: 14, color: Color(0xFF22C55E)),
-                      const SizedBox(width: 8),
-                      Text(
-                        'REAL-TIME UPLINK FEED',
+                      const Text(
+                        'BANDWIDTH SYNC',
                         style: TextStyle(
                           fontSize: 10,
                           fontWeight: FontWeight.w900,
-                          color: const Color(0xFF22C55E).withOpacity(0.6),
-                          letterSpacing: 1,
+                          color: Color(0xFF22C55E),
+                        ),
+                      ),
+                      Text(
+                        '$_progress%',
+                        style: const TextStyle(
+                          fontSize: 14,
+                          fontWeight: FontWeight.w900,
+                          color: Color(0xFF22C55E),
                         ),
                       ),
                     ],
                   ),
-                  const Divider(color: Colors.white10, height: 20),
-                  Expanded(
-                    child: ListView.builder(
-                      controller: _lockScrollController,
-                      itemCount: _logs.length,
-                      itemBuilder: (context, index) {
-                        return Padding(
-                          padding: const EdgeInsets.symmetric(vertical: 4),
-                          child: Row(
-                            crossAxisAlignment: CrossAxisAlignment.start,
-                            children: [
-                              const Text(
-                                '>',
-                                style: TextStyle(
-                                  fontSize: 12,
-                                  fontWeight: FontWeight.w900,
-                                  color: Color(0xFF22C55E),
-                                ),
-                              ),
-                              const SizedBox(width: 10),
-                              Expanded(
-                                child: Text(
-                                  _logs[index],
-                                  style: const TextStyle(
-                                    fontFamily: 'monospace',
-                                    fontSize: 12,
-                                    color: Colors.white,
-                                    height: 1.4,
-                                  ),
-                                ),
-                              ),
-                            ],
-                          ),
-                        );
-                      },
+                  const SizedBox(height: 12),
+                  ClipRRect(
+                    borderRadius: BorderRadius.circular(4),
+                    child: LinearProgressIndicator(
+                      value: _progress / 100,
+                      backgroundColor: Colors.white.withOpacity(0.05),
+                      valueColor: const AlwaysStoppedAnimation(
+                        Color(0xFF22C55E),
+                      ),
+                      minHeight: 8,
                     ),
                   ),
                 ],
               ),
             ),
-          ),
-          const SizedBox(height: 16),
-          SizedBox(
-            width: double.infinity,
-            child: OutlinedButton(
-              onPressed: () {
-                setState(() {
-                  _isDownloadLocked = false;
-                  _isBenchmarking = false;
-                });
-              },
-              child: const Text('CANCEL OPERATION'),
+            const SizedBox(height: 16),
+            // Log area - NOW EXPANDED
+            Expanded(
+              child: Container(
+                width: double.infinity,
+                padding: const EdgeInsets.all(16),
+                decoration: BoxDecoration(
+                  color: Colors.black,
+                  borderRadius: BorderRadius.circular(20),
+                  border: Border.all(
+                    color: const Color(0xFF22C55E).withOpacity(0.2),
+                  ),
+                  boxShadow: [
+                    BoxShadow(
+                      color: const Color(0xFF22C55E).withOpacity(0.05),
+                      blurRadius: 20,
+                    ),
+                  ],
+                ),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Row(
+                      children: [
+                        const Icon(
+                          Icons.terminal,
+                          size: 14,
+                          color: Color(0xFF22C55E),
+                        ),
+                        const SizedBox(width: 8),
+                        Text(
+                          'REAL-TIME UPLINK FEED',
+                          style: TextStyle(
+                            fontSize: 10,
+                            fontWeight: FontWeight.w900,
+                            color: const Color(0xFF22C55E).withOpacity(0.6),
+                            letterSpacing: 1,
+                          ),
+                        ),
+                      ],
+                    ),
+                    const Divider(color: Colors.white10, height: 20),
+                    Expanded(
+                      child: ListView.builder(
+                        controller: _lockScrollController,
+                        itemCount: _logs.length,
+                        itemBuilder: (context, index) {
+                          return Padding(
+                            padding: const EdgeInsets.symmetric(vertical: 4),
+                            child: Row(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                const Text(
+                                  '>',
+                                  style: TextStyle(
+                                    fontSize: 12,
+                                    fontWeight: FontWeight.w900,
+                                    color: Color(0xFF22C55E),
+                                  ),
+                                ),
+                                const SizedBox(width: 10),
+                                Expanded(
+                                  child: Text(
+                                    _logs[index],
+                                    style: const TextStyle(
+                                      fontFamily: 'monospace',
+                                      fontSize: 12,
+                                      color: Colors.white,
+                                      height: 1.4,
+                                    ),
+                                  ),
+                                ),
+                              ],
+                            ),
+                          );
+                        },
+                      ),
+                    ),
+                  ],
+                ),
+              ),
             ),
-          ),
-        ],
+            const SizedBox(height: 16),
+            SizedBox(
+              width: double.infinity,
+              child: OutlinedButton(
+                onPressed: () {
+                  setState(() {
+                    _isDownloadLocked = false;
+                    _isBenchmarking = false;
+                  });
+                },
+                child: const Text('CANCEL OPERATION'),
+              ),
+            ),
+          ],
+        ),
       ),
-    ),
-  );
-}
+    );
+  }
 
   Widget _buildHeader() {
     final isOpenAI = _currentIndex == 4;
